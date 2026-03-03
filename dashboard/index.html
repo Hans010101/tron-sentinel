@@ -565,8 +565,9 @@
 <!-- ══════════════════════════ FOOTER ══════════════════════ -->
 <footer>
   TRON Sentinel &copy; 2025 &nbsp;·&nbsp;
-  当前数据来源：<span id="data-source">加载中…</span> &nbsp;·&nbsp;
-  <span id="data-timestamp"></span> &nbsp;·&nbsp;
+  数据来源：RSS 实时采集（<span id="data-source">加载中…</span>）&nbsp;·&nbsp;
+  最后更新：<span id="data-timestamp">—</span> &nbsp;·&nbsp;
+  <a href="https://github.com/Hans010101/TRON-Sentinel" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">GitHub</a> &nbsp;·&nbsp;
   Powered by Claude Sonnet
 </footer>
 
@@ -645,14 +646,16 @@ async function loadData() {
 
     const src = document.getElementById('data-source');
     const ts  = document.getElementById('data-timestamp');
-    if (src) src.textContent = '实时数据';
+    if (src) src.textContent = '4 源';
     if (ts && DATA.generated_at) {
-      ts.textContent = '更新于 ' + new Date(DATA.generated_at).toLocaleString('zh-CN');
+      ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
     }
     console.info('[Sentinel] Loaded real data from data.json');
   } catch (e) {
     const src = document.getElementById('data-source');
+    const ts  = document.getElementById('data-timestamp');
     if (src) src.textContent = '模拟数据';
+    if (ts) ts.textContent = '—';
     console.warn('[Sentinel] data.json unavailable, using mock data:', e.message);
   }
 }
