@@ -1,0 +1,56 @@
+# ============================================================
+# TRON Sentinel - Python Dependencies
+# ============================================================
+
+# --- Web Framework & API ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+websockets==14.1
+python-multipart==0.0.20
+
+# --- Data Collection ---
+tweepy==4.14.0              # Twitter/X API v2
+praw==7.8.1                 # Reddit API
+feedparser==6.0.11          # RSS/Atom feed parsing
+httpx==0.28.1               # Async HTTP client (news, on-chain APIs)
+aiohttp==3.11.11            # Async HTTP (alternative/websockets)
+
+# --- AI / NLP Analysis ---
+anthropic==0.45.0           # Claude LLM API
+transformers==4.49.0        # HuggingFace models (sentiment)
+torch==2.6.0                # PyTorch backend for transformers
+sentencepiece==0.2.0        # Tokenizer dependency
+
+# --- Database ---
+sqlalchemy==2.0.37          # ORM
+asyncpg==0.30.0             # Async PostgreSQL driver
+alembic==1.14.1             # Database migrations
+redis==5.2.1                # Redis for caching and pub/sub
+
+# --- Configuration & Validation ---
+pydantic==2.10.6
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+pyyaml==6.0.2
+
+# --- Scheduling & Task Queue ---
+apscheduler==3.10.4         # Periodic collection tasks
+celery==5.4.0               # Distributed task queue (optional)
+
+# --- Alerting ---
+python-telegram-bot==21.9   # Telegram notifications
+aiosmtplib==3.0.1           # Async SMTP email sending
+
+# --- Monitoring & Observability ---
+prometheus-client==0.21.1   # Metrics exposure
+structlog==24.4.0            # Structured logging
+
+# --- Data Processing ---
+pandas==2.2.3
+numpy==2.2.3
+
+# --- Testing ---
+pytest==8.3.4
+pytest-asyncio==0.25.3
+pytest-cov==6.0.0
+httpx==0.28.1               # Also used as ASGI test client
