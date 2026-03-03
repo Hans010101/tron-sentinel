@@ -16,6 +16,7 @@ httpx==0.28.1               # Async HTTP client (news, on-chain APIs)
 aiohttp==3.11.11            # Async HTTP (alternative/websockets)
 
 # --- AI / NLP Analysis ---
+vaderSentiment==3.3.2       # Rule-based sentiment analysis (English)
 anthropic==0.45.0           # Claude LLM API
 transformers==4.49.0        # HuggingFace models (sentiment)
 torch==2.6.0                # PyTorch backend for transformers
