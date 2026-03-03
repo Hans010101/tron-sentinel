@@ -1,12 +1,16 @@
 """
 main.py
 ~~~~~~~
-TRON Sentinel – three-step data pipeline orchestrator.
+TRON Sentinel – full data pipeline orchestrator.
 
 Executes in order:
-    Step 1  RSS collection       collectors/rss_collector.py
-    Step 2  Sentiment analysis   analyzers/sentiment_analyzer.py
-    Step 3  Telegram alerting    alerting/telegram_alerter.py
+    Step 1  RSS collection          collectors/rss_collector.py
+    Step 2  Telegram channel scrape collectors/telegram_collector.py
+    Step 3  Google News scrape      collectors/google_news_collector.py
+    Step 4  CoinGecko market data   collectors/coingecko_collector.py
+    Step 5  DeFiLlama TVL data      collectors/defillama_collector.py
+    Step 6  Sentiment analysis      analyzers/sentiment_analyzer.py
+    Step 7  Telegram alerting       alerting/telegram_alerter.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -39,8 +43,9 @@ logger = logging.getLogger("sentinel.main")
 
 # ── Step runner ────────────────────────────────────────────────────────────────
 
-_SEP  = "─" * 58
-_SEP2 = "═" * 58
+_SEP        = "─" * 58
+_SEP2       = "═" * 58
+_TOTAL_STEPS = 7          # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -52,7 +57,7 @@ def run_step(num: int, label: str, fn, *args, **kwargs):
     remaining steps.
     """
     print(f"\n{_SEP}")
-    print(f"  [{num}/3]  {label}")
+    print(f"  [{num}/{_TOTAL_STEPS}]  {label}")
     print(_SEP)
     t0 = time.perf_counter()
     try:
@@ -70,8 +75,8 @@ def run_step(num: int, label: str, fn, *args, **kwargs):
 
 # ── Step implementations ───────────────────────────────────────────────────────
 
-def do_collect() -> int:
-    """Run the RSS collector; returns the count of newly inserted articles."""
+def do_collect_rss() -> int:
+    """RSS collector → returns count of newly inserted articles."""
     from collectors.rss_collector import init_db, collect_all  # noqa: PLC0415
     conn = init_db(DB_PATH)
     try:
@@ -80,8 +85,48 @@ def do_collect() -> int:
         conn.close()
 
 
+def do_collect_telegram() -> int:
+    """Telegram channel collector → returns count of newly inserted messages."""
+    from collectors.telegram_collector import open_db, collect_all  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_all(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_google_news() -> int:
+    """Google News RSS collector → returns count of newly inserted articles."""
+    from collectors.google_news_collector import open_db, collect_all  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_all(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_coingecko() -> bool:
+    """CoinGecko market-data collector → returns True on success."""
+    from collectors.coingecko_collector import open_db, collect  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_defillama() -> bool:
+    """DeFiLlama TVL collector → returns True on success."""
+    from collectors.defillama_collector import open_db, collect  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect(conn)
+    finally:
+        conn.close()
+
+
 def do_analyze() -> int:
-    """Run VADER sentiment analysis; returns the count of newly scored rows."""
+    """VADER sentiment analysis → returns count of newly scored rows."""
     from analyzers.sentiment_analyzer import open_db, analyze_pending  # noqa: PLC0415
     conn = open_db(DB_PATH)
     try:
@@ -91,7 +136,7 @@ def do_analyze() -> int:
 
 
 def do_alert() -> int:
-    """Dispatch Telegram alerts; returns the count of messages sent."""
+    """Dispatch Telegram alerts → returns count of messages sent."""
     from alerting.telegram_alerter import (  # noqa: PLC0415
         TelegramAlerter, fetch_negative_articles, open_db as alert_open_db,
     )
@@ -105,13 +150,12 @@ def do_alert() -> int:
 
 # ── Dashboard JSON builder ─────────────────────────────────────────────────────
 
-# Language metadata for the bar-chart section.
 _LANG_META: dict[str, dict] = {
-    "en": {"name": "English",     "code": "EN", "color": "#6366f1"},
-    "zh": {"name": "中文",         "code": "ZH", "color": "#10b981"},
-    "ja": {"name": "日本語",       "code": "JA", "color": "#f59e0b"},
-    "ko": {"name": "한국어",       "code": "KO", "color": "#3b82f6"},
-    "vi": {"name": "Tiếng Việt",  "code": "VI", "color": "#ec4899"},
+    "en": {"name": "English",    "code": "EN", "color": "#6366f1"},
+    "zh": {"name": "中文",        "code": "ZH", "color": "#10b981"},
+    "ja": {"name": "日本語",      "code": "JA", "color": "#f59e0b"},
+    "ko": {"name": "한국어",      "code": "KO", "color": "#3b82f6"},
+    "vi": {"name": "Tiếng Việt", "code": "VI", "color": "#ec4899"},
 }
 
 _LEVEL_CLASS: dict[str, str] = {
@@ -142,9 +186,30 @@ def _time_ago(dt_str: str | None, now: datetime) -> str:
         return dt_str[:10] if len(dt_str) >= 10 else "未知时间"
 
 
+def _latest_market(conn: sqlite3.Connection, source: str) -> dict:
+    """Return the most-recently collected market_data row for *source*."""
+    row = conn.execute(
+        "SELECT price_usd, change_24h, market_cap, volume_24h, tvl, collected_at "
+        "FROM market_data WHERE source = ? "
+        "ORDER BY collected_at DESC LIMIT 1",
+        (source,),
+    ).fetchone()
+    if not row:
+        return {}
+    price, change, mcap, vol, tvl, ts = row
+    return {
+        "price_usd":   price,
+        "change_24h":  change,
+        "market_cap":  mcap,
+        "volume_24h":  vol,
+        "tvl":         tvl,
+        "collected_at": ts,
+    }
+
+
 def build_dashboard_json(conn: sqlite3.Connection) -> dict:
     """
-    Query raw_articles and return the complete dashboard data payload.
+    Query raw_articles and market_data and return the full dashboard payload.
 
     Schema of the returned dict:
         generated_at     ISO-8601 timestamp
@@ -156,13 +221,15 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
                          level/icon/class, title, source, score,
                          link, time_ago
         language_volumes list of {name, code, value, color} dicts
+        market           TRX price, change, market_cap, volume (CoinGecko)
+                         + tvl (DeFiLlama)
     """
     from alerting.telegram_alerter import (  # noqa: PLC0415
         alert_level, fetch_negative_articles,
     )
 
     now       = datetime.now(timezone.utc)
-    today_pfx = now.strftime("%Y-%m-%d")          # "2025-03-03"
+    today_pfx = now.strftime("%Y-%m-%d")
     cutoff_24 = (now - timedelta(hours=24)).isoformat()
 
     # ── Overview ───────────────────────────────────────────────────────────────
@@ -177,7 +244,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "GROUP  BY sentiment_label"
     ).fetchall()
     label_counts: dict[str, int] = {r[0]: r[1] for r in label_rows}
-    total_lbl    = sum(label_counts.values()) or 1  # guard /0
+    total_lbl    = sum(label_counts.values()) or 1
 
     def pct(label: str) -> float:
         return round(label_counts.get(label, 0) / total_lbl * 100, 1)
@@ -189,7 +256,6 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
     ).fetchone()[0]
 
     # ── Sentiment trend – last 24 hourly slots ─────────────────────────────────
-    # Fetch every relevant row in a single query, then pivot in Python.
     hourly_raw = conn.execute(
         """
         SELECT SUBSTR(collected_at, 1, 13) AS hkey,
@@ -203,35 +269,27 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         (cutoff_24,),
     ).fetchall()
 
-    # Nested dict:  "2025-03-03T14" → {"positive": 12, "negative": 3, ...}
     hour_map: dict[str, dict[str, int]] = {}
     for hkey, lbl, cnt in hourly_raw:
         hour_map.setdefault(hkey, {})[lbl] = cnt
 
     trend: list[dict] = []
-    for i in range(23, -1, -1):          # slot 23 = 23 h ago, slot 0 = now
-        slot  = now - timedelta(hours=i)
-        hkey  = slot.strftime("%Y-%m-%dT%H")
+    for i in range(23, -1, -1):
+        slot   = now - timedelta(hours=i)
+        hkey   = slot.strftime("%Y-%m-%dT%H")
         counts = hour_map.get(hkey, {})
         total_h = sum(counts.values())
-
         if total_h:
             p = round(counts.get("positive", 0) / total_h * 100, 1)
             n = round(counts.get("negative", 0) / total_h * 100, 1)
             u = round(max(0.0, 100 - p - n), 1)
         else:
-            # Empty hour → fall back to the overall label distribution.
             p, n, u = pct("positive"), pct("negative"), pct("neutral")
-
-        trend.append({
-            "hour":     slot.strftime("%H:00"),
-            "positive": p,
-            "negative": n,
-            "neutral":  u,
-        })
+        trend.append({"hour": slot.strftime("%H:00"), "positive": p,
+                      "negative": n, "neutral": u})
 
     # ── Alerts – top 5 most recent negative articles ───────────────────────────
-    neg_articles = fetch_negative_articles(conn, limit=5)
+    neg_articles  = fetch_negative_articles(conn, limit=5)
     alerts_out: list[dict] = []
     for a in neg_articles:
         icon, level = alert_level(a["sentiment_score"])
@@ -257,12 +315,21 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
             lang_code,
             {"name": lang_code, "code": lang_code.upper(), "color": "#94a3b8"},
         )
-        lang_vols.append({
-            "name":  meta["name"],
-            "code":  meta["code"],
-            "value": count,
-            "color": meta["color"],
-        })
+        lang_vols.append({"name": meta["name"], "code": meta["code"],
+                          "value": count,       "color": meta["color"]})
+
+    # ── Market data (CoinGecko + DeFiLlama) ────────────────────────────────────
+    cg = _latest_market(conn, "coingecko")
+    dl = _latest_market(conn, "defillama")
+    market: dict = {
+        "price_usd":      cg.get("price_usd"),
+        "change_24h":     cg.get("change_24h"),
+        "market_cap":     cg.get("market_cap"),
+        "volume_24h":     cg.get("volume_24h"),
+        "tvl":            dl.get("tvl"),
+        "coingecko_at":   cg.get("collected_at"),
+        "defillama_at":   dl.get("collected_at"),
+    }
 
     return {
         "generated_at":     now.isoformat(),
@@ -276,6 +343,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "sentiment_trend":  trend,
         "alerts":           alerts_out,
         "language_volumes": lang_vols,
+        "market":           market,
     }
 
 
@@ -299,29 +367,79 @@ def main() -> None:
     step_ok: dict[str, bool] = {}
 
     # ── Step 1: RSS collection ─────────────────────────────────────────────────
-    val, ok = run_step(1, "RSS 新闻采集", do_collect)
-    step_ok["collect"] = ok
+    val, ok = run_step(1, "RSS 新闻采集（CoinDesk / Decrypt / CoinTelegraph / BlockBeats）",
+                       do_collect_rss)
+    step_ok["rss"] = ok
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 2: Sentiment analysis ─────────────────────────────────────────────
+    # ── Step 2: Telegram channel scrape ───────────────────────────────────────
+    val, ok = run_step(2, "Telegram 频道采集（@tronfoundation / @justinsuntron / …）",
+                       do_collect_telegram)
+    step_ok["telegram_collect"] = ok
+    if ok:
+        print(f"     新增消息 : {val} 条")
+
+    # ── Step 3: Google News ────────────────────────────────────────────────────
+    val, ok = run_step(3, "Google News 采集（TRON / TRX / Justin Sun）",
+                       do_collect_google_news)
+    step_ok["google_news"] = ok
+    if ok:
+        print(f"     新增文章 : {val} 条")
+
+    # ── Step 4: CoinGecko market data ─────────────────────────────────────────
+    val, ok = run_step(4, "CoinGecko TRX 市场数据", do_collect_coingecko)
+    step_ok["coingecko"] = ok
+    if ok and val:
+        # Print a quick price summary from the freshly written row.
+        try:
+            conn_tmp = sqlite3.connect(DB_PATH)
+            row = conn_tmp.execute(
+                "SELECT price_usd, change_24h FROM market_data "
+                "WHERE source='coingecko' ORDER BY collected_at DESC LIMIT 1"
+            ).fetchone()
+            conn_tmp.close()
+            if row:
+                price, change = row
+                sign = "+" if (change or 0) >= 0 else ""
+                print(f"     TRX 价格 : ${price:.5f}  ({sign}{change:.2f}%)")
+        except Exception:
+            pass
+
+    # ── Step 5: DeFiLlama TVL ─────────────────────────────────────────────────
+    val, ok = run_step(5, "DeFiLlama TRON TVL 数据", do_collect_defillama)
+    step_ok["defillama"] = ok
+    if ok and val:
+        try:
+            conn_tmp = sqlite3.connect(DB_PATH)
+            row = conn_tmp.execute(
+                "SELECT tvl FROM market_data "
+                "WHERE source='defillama' ORDER BY collected_at DESC LIMIT 1"
+            ).fetchone()
+            conn_tmp.close()
+            if row:
+                print(f"     TRON TVL : ${row[0] / 1e9:.2f}B")
+        except Exception:
+            pass
+
+    # ── Step 6: Sentiment analysis ─────────────────────────────────────────────
     if DB_PATH.exists():
-        val, ok = run_step(2, "VADER 情绪分析", do_analyze)
+        val, ok = run_step(6, "VADER 情绪分析", do_analyze)
         step_ok["analyze"] = ok
         if ok:
             print(f"     本次分析 : {val} 条")
     else:
-        print(f"\n  ⚠  数据库未找到，跳过第 2 步（{DB_PATH}）")
+        print(f"\n  ⚠  数据库未找到，跳过第 6 步（{DB_PATH}）")
         step_ok["analyze"] = False
 
-    # ── Step 3: Telegram alerting ──────────────────────────────────────────────
+    # ── Step 7: Telegram alerting ──────────────────────────────────────────────
     if DB_PATH.exists():
-        val, ok = run_step(3, "Telegram 预警发送", do_alert)
+        val, ok = run_step(7, "Telegram 预警发送", do_alert)
         step_ok["alert"] = ok
         if ok:
             print(f"     已发送   : {val} 条")
     else:
-        print(f"\n  ⚠  数据库未找到，跳过第 3 步（{DB_PATH}）")
+        print(f"\n  ⚠  数据库未找到，跳过第 7 步（{DB_PATH}）")
         step_ok["alert"] = False
 
     # ── Dashboard JSON ─────────────────────────────────────────────────────────
@@ -337,6 +455,7 @@ def main() -> None:
             write_json(data)
             elapsed = time.perf_counter() - t0
             ov = data["overview"]
+            mk = data.get("market", {})
             print(f"  ✓  完成  ({elapsed:.2f}s)")
             print(f"     今日声量 : {ov['today_total']} 条")
             print(
@@ -346,6 +465,10 @@ def main() -> None:
             )
             print(f"     活跃预警 : {ov['active_alerts']} 条")
             print(f"     预警列表 : {len(data['alerts'])} 条写入 JSON")
+            if mk.get("price_usd"):
+                print(f"     TRX 价格 : ${mk['price_usd']:.5f}")
+            if mk.get("tvl"):
+                print(f"     TRON TVL : ${mk['tvl'] / 1e9:.2f}B")
         except Exception as exc:
             print(f"  ✗  JSON 生成失败: {exc}")
             logger.exception("JSON generation failed")
@@ -354,8 +477,8 @@ def main() -> None:
 
     # ── Summary ────────────────────────────────────────────────────────────────
     elapsed_total = time.perf_counter() - t_start
-    n_ok  = sum(step_ok.values())
-    n_all = len(step_ok)
+    n_ok   = sum(step_ok.values())
+    n_all  = len(step_ok)
     status = "✓ 全部成功" if n_ok == n_all else f"⚠ {n_ok}/{n_all} 步骤成功"
 
     print(f"\n{_SEP2}")

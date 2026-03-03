@@ -14,6 +14,7 @@ praw==7.8.1                 # Reddit API
 feedparser==6.0.11          # RSS/Atom feed parsing
 httpx==0.28.1               # Async HTTP client (news, on-chain APIs)
 aiohttp==3.11.11            # Async HTTP (alternative/websockets)
+telethon==1.36.0            # Telegram MTProto client (channel scraping)
 
 # --- AI / NLP Analysis ---
 vaderSentiment==3.3.2       # Rule-based sentiment analysis (English)
