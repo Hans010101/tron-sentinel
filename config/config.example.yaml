@@ -1,0 +1,63 @@
+# TRON Sentinel - Example configuration file
+# Copy to config.yaml and fill in your actual values
+
+database:
+  host: localhost
+  port: 5432
+  name: tron_sentinel
+  user: postgres
+  password: ""
+
+collectors:
+  twitter:
+    bearer_token: ""
+    keywords:
+      - "TRON"
+      - "TRX"
+      - "Justin Sun"
+    interval_seconds: 60
+  reddit:
+    client_id: ""
+    client_secret: ""
+    subreddits:
+      - "tronix"
+      - "CryptoCurrency"
+    interval_seconds: 300
+  news:
+    rss_feeds:
+      - "https://cointelegraph.com/rss"
+      - "https://coindesk.com/arc/outboundfeeds/rss/"
+    interval_seconds: 600
+  onchain:
+    trongrid_api_key: ""
+    interval_seconds: 120
+
+analyzers:
+  sentiment:
+    model: "cardiffnlp/twitter-roberta-base-sentiment-latest"
+  llm:
+    provider: "anthropic"
+    model: "claude-sonnet-4-6"
+    api_key: ""
+
+alerting:
+  telegram:
+    bot_token: ""
+    chat_id: ""
+  email:
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    sender: ""
+    password: ""
+    recipients: []
+  webhook:
+    urls: []
+  thresholds:
+    sentiment_drop: -0.3      # Alert if score drops by this delta
+    negative_ratio: 0.6       # Alert if >60% of posts are negative
+    volume_spike: 3.0         # Alert if volume is 3x above 24h average
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8000
+  secret_key: "change-me-in-production"
