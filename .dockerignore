@@ -1,0 +1,41 @@
+# ── Version control ───────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Python artifacts ──────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Local runtime data (never bake into image) ────────────────────────────────
+data/*.db
+data/*.session
+data/telegram_session*
+dashboard/data.json
+
+# ── IDE / OS ──────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+*.swp
+*.swo
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+*.env
+config/config.yaml
+
+# ── Documentation (not needed at runtime) ─────────────────────────────────────
+deploy/DEPLOY_GUIDE.md

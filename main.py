@@ -21,6 +21,7 @@ Usage:
 
 import json
 import logging
+import os
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
@@ -348,10 +349,39 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
 
 
 def write_json(data: dict, path: Path = JSON_PATH) -> None:
-    """Serialise *data* to *path* as UTF-8 JSON, creating directories as needed."""
+    """
+    Serialise *data* to *path* as UTF-8 JSON, creating directories as needed.
+
+    When the environment variable ``GCS_BUCKET`` is set (injected by Cloud Run
+    via deploy.sh), also uploads the JSON to that GCS bucket as ``data.json``
+    so that the Cloud Storage–hosted dashboard can fetch real data.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    json_str = json.dumps(data, ensure_ascii=False, indent=2)
+    path.write_text(json_str, encoding="utf-8")
     logger.info("Dashboard JSON written → %s", path.resolve())
+
+    # ── Optional GCS upload (active when running on Cloud Run) ────────────────
+    bucket_name = os.environ.get("GCS_BUCKET", "").strip()
+    if not bucket_name:
+        return
+    try:
+        from google.cloud import storage as gcs  # noqa: PLC0415
+        client = gcs.Client()
+        blob   = client.bucket(bucket_name).blob("data.json")
+        blob.upload_from_string(
+            json_str.encode("utf-8"),
+            content_type="application/json",
+        )
+        # Make the object publicly readable so the browser can fetch it.
+        blob.make_public()
+        logger.info("Dashboard JSON uploaded → gs://%s/data.json", bucket_name)
+    except Exception as exc:
+        logger.warning(
+            "GCS upload skipped (bucket=%s): %s. "
+            "Local dashboard/data.json is still available.",
+            bucket_name, exc,
+        )
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────
