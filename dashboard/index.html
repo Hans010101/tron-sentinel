@@ -228,6 +228,12 @@
     .stat-card.c-red::after    { background: var(--red); }
     .stat-card.c-orange::after { background: var(--orange); }
     .stat-card.c-indigo::after { background: var(--indigo); }
+    .stat-card.c-blue::before  { background: linear-gradient(90deg, var(--blue),  transparent); }
+    .stat-card.c-amber::before { background: linear-gradient(90deg, var(--amber), transparent); }
+    .stat-card.c-blue::after   { background: var(--blue); }
+    .stat-card.c-amber::after  { background: var(--amber); }
+    .stat-value.c-blue         { color: var(--blue); }
+    .stat-value.c-amber        { color: var(--amber); }
 
     .stat-icon {
       position: absolute;
@@ -341,6 +347,13 @@
     .tag-low      { background: var(--accent-dim); color: var(--accent); }
     .meta-dot { color: var(--border); }
 
+    /* ── MARKET ROW ────────────────────────────────────────── */
+    .market-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
     /* ── ROW 3: LANG + COMPETITORS ─────────────────────────── */
     .row-bot {
       display: grid;
@@ -424,6 +437,7 @@
     /* ── RESPONSIVE ────────────────────────────────────────── */
     @media (max-width: 1280px) {
       .overview-grid { grid-template-columns: repeat(2, 1fr); }
+      .market-row    { grid-template-columns: 1fr 1fr; }
       .row-mid { grid-template-columns: 1fr; }
       .row-bot { grid-template-columns: 1fr; }
     }
@@ -432,6 +446,7 @@
       main { padding: 16px; }
       .nav-tag { display: none; }
       .overview-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+      .market-row    { grid-template-columns: 1fr; }
       .stat-value { font-size: 26px; }
     }
   </style>
@@ -467,46 +482,63 @@
     <div class="stat-card c-green">
       <div class="stat-icon">📊</div>
       <div class="stat-label">今日总声量</div>
-      <div class="stat-value c-green">84,721</div>
-      <div class="stat-delta">
-        <span class="delta-up delta-arrow">▲</span>
-        <span class="delta-up">12.4%</span>
-        <span>较昨日同期</span>
-      </div>
+      <div class="stat-value c-green" id="stat-total">—</div>
+      <div class="stat-delta"><span>今日已采集</span></div>
     </div>
 
     <div class="stat-card c-green">
       <div class="stat-icon">😊</div>
       <div class="stat-label">正面情绪占比</div>
-      <div class="stat-value c-green">58.3%</div>
-      <div class="stat-delta">
-        <span class="delta-up delta-arrow">▲</span>
-        <span class="delta-up">3.1%</span>
-        <span>较昨日</span>
-      </div>
+      <div class="stat-value c-green" id="stat-pos">—</div>
+      <div class="stat-delta"><span>已分析文章</span></div>
     </div>
 
     <div class="stat-card c-red">
       <div class="stat-icon">😠</div>
       <div class="stat-label">负面情绪占比</div>
-      <div class="stat-value c-red">24.7%</div>
-      <div class="stat-delta">
-        <span class="delta-down delta-arrow">▲</span>
-        <span class="delta-down">5.8%</span>
-        <span>较昨日（趋坏）</span>
-      </div>
+      <div class="stat-value c-red" id="stat-neg">—</div>
+      <div class="stat-delta"><span>已分析文章</span></div>
     </div>
 
     <div class="stat-card c-orange">
       <div class="stat-icon">🔔</div>
       <div class="stat-label">活跃预警数</div>
-      <div class="stat-value c-orange">7</div>
+      <div class="stat-value c-orange" id="stat-alerts">—</div>
+      <div class="stat-delta"><span>今日负面文章</span></div>
+    </div>
+  </div>
+
+  <!-- ── SECTION LABEL ─────────────────────────────────── -->
+  <div class="section-label">市场行情</div>
+
+  <!-- ── MARKET STAT CARDS ─────────────────────────────── -->
+  <div class="market-row">
+    <div class="stat-card c-blue">
+      <div class="stat-icon">💰</div>
+      <div class="stat-label">TRX 实时价格</div>
+      <div class="stat-value c-blue" id="stat-price">—</div>
       <div class="stat-delta">
-        <span class="delta-down delta-arrow">▲</span>
-        <span class="delta-down">+3</span>
-        <span>较昨日</span>
+        <span id="stat-change">—</span>
+        <span>&nbsp;24h 涨跌幅</span>
       </div>
     </div>
+
+    <div class="stat-card c-amber">
+      <div class="stat-icon">🏦</div>
+      <div class="stat-label">TRON TVL（链上锁仓）</div>
+      <div class="stat-value c-amber" id="stat-tvl">—</div>
+      <div class="stat-delta"><span>DeFiLlama 数据</span></div>
+    </div>
+  </div>
+
+  <!-- ── 7-DAY PRICE CHART ──────────────────────────────── -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">TRX 7 日价格走势</div>
+      <span class="badge badge-green">CoinGecko</span>
+    </div>
+    <div class="card-sub">过去 7 天 TRX/USD 价格走势（小时级数据）</div>
+    <canvas id="priceChart" style="width:100%;height:220px"></canvas>
   </div>
 
   <!-- ── SECTION LABEL ─────────────────────────────────── -->
@@ -540,7 +572,7 @@
     <div class="card">
       <div class="card-head">
         <div class="card-title">活跃预警</div>
-        <span class="badge badge-red">7 条</span>
+        <span class="badge badge-red" id="badge-alerts">— 条</span>
       </div>
       <div class="card-sub">最近触发的监控预警（点击查看详情）</div>
       <div class="alert-list" id="alertList"></div>
@@ -581,8 +613,9 @@
 <!-- ══════════════════════════ FOOTER ══════════════════════ -->
 <footer>
   TRON Sentinel &copy; 2025 &nbsp;·&nbsp;
-  数据每 <span>60</span> 秒更新一次 &nbsp;·&nbsp;
-  当前为 <span>模拟数据</span> 演示版 &nbsp;·&nbsp;
+  数据来源：RSS 实时采集（<span id="data-source">加载中…</span>）&nbsp;·&nbsp;
+  最后更新：<span id="data-timestamp">—</span> &nbsp;·&nbsp;
+  <a href="https://github.com/Hans010101/TRON-Sentinel" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">GitHub</a> &nbsp;·&nbsp;
   Powered by Claude Sonnet
 </footer>
 
@@ -590,120 +623,313 @@
 <script>
 'use strict';
 
-/* ── MOCK DATA ─────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   MOCK FALLBACK DATA
+   Used when data.json cannot be loaded (e.g. file:// access).
+   ══════════════════════════════════════════════════════════ */
 
-/* Generate 24 hourly sentiment data points with realistic drift */
-function buildSentimentSeries() {
-  const pos = [], neg = [], neu = [];
-  let p = 56, n = 22;
-  for (let i = 0; i < 24; i++) {
-    // Add some local events (spikes)
-    const spike = (i === 6) ? -8 : (i === 14) ? 5 : 0;
-    p = Math.max(28, Math.min(78, p + (Math.random() - 0.46) * 7 + spike));
-    n = Math.max(10, Math.min(42, n + (Math.random() - 0.5) * 5 - spike * 0.4));
-    const neutral = Math.max(5, 100 - p - n);
-    pos.push(+p.toFixed(1));
-    neg.push(+n.toFixed(1));
-    neu.push(+neutral.toFixed(1));
+function _buildMockPriceHistory() {
+  const history = [];
+  const now = Date.now();
+  let price = 0.0920;
+  for (let i = 167; i >= 0; i--) {
+    price = Math.max(0.070, Math.min(0.115,
+      price + (Math.random() - 0.5) * 0.0015));
+    history.push([now - i * 3_600_000, +price.toFixed(6)]);
   }
-  return { pos, neg, neu };
+  return history;
 }
 
-const SENTIMENT = buildSentimentSeries();
+function _buildMockTrend() {
+  const trend = [];
+  let p = 56, n = 22;
+  const now = Date.now();
+  for (let i = 23; i >= 0; i--) {
+    const d     = new Date(now - i * 3_600_000);
+    const spike = i === 17 ? -8 : i === 9 ? 5 : 0;
+    p = Math.max(28, Math.min(78, p + (Math.random() - 0.46) * 7 + spike));
+    n = Math.max(10, Math.min(42, n + (Math.random() - 0.5) * 5 - spike * 0.4));
+    const u = Math.max(5, 100 - p - n);
+    trend.push({
+      hour:     String(d.getHours()).padStart(2, '0') + ':00',
+      positive: +p.toFixed(1),
+      negative: +n.toFixed(1),
+      neutral:  +u.toFixed(1),
+    });
+  }
+  return trend;
+}
 
-const ALERTS = [
-  {
-    emoji: '🔴', tag: 'CRITICAL', tagClass: 'tag-critical',
-    msg: 'TRX 价格急跌 9.2%，Twitter 负面情绪在 30 分钟内飙升 42%',
-    source: 'Twitter · 链上监控', time: '5 分钟前',
+const _MOCK = {
+  overview: {
+    today_total: 84721, positive_pct: 58.3,
+    negative_pct: 24.7, neutral_pct: 17.0, active_alerts: 7,
   },
-  {
-    emoji: '🟠', tag: 'HIGH', tagClass: 'tag-high',
-    msg: 'Justin Sun 相关负面新闻量过去 1h 突增 340%，媒体指数异常',
-    source: 'CoinDesk · CoinTelegraph', time: '23 分钟前',
+  sentiment_trend: _buildMockTrend(),
+  alerts: [
+    { icon: '🔴', level: 'CRITICAL', level_class: 'tag-critical',
+      title:    'TRX 价格急跌 9.2%，Twitter 负面情绪在 30 分钟内飙升 42%',
+      source:   'Twitter · 链上监控',      score: -0.82, link: '#', time_ago: '5 分钟前' },
+    { icon: '🟠', level: 'HIGH',     level_class: 'tag-high',
+      title:    'Justin Sun 相关负面新闻量过去 1h 突增 340%，媒体指数异常',
+      source:   'CoinDesk · CoinTelegraph', score: -0.61, link: '#', time_ago: '23 分钟前' },
+    { icon: '🟡', level: 'MEDIUM',   level_class: 'tag-medium',
+      title:    'r/Tronix 情绪由正转负，负面帖占比升至 61%（阈值 60%）',
+      source:   'Reddit',                  score: -0.35, link: '#', time_ago: '1 小时前' },
+    { icon: '🟠', level: 'HIGH',     level_class: 'tag-high',
+      title:    '链上单笔大额转账（>500 万 TRX）触发舆情关联异常预警',
+      source:   'TronGrid · 链上数据',     score: -0.58, link: '#', time_ago: '3 小时前' },
+    { icon: '🟢', level: 'LOW',      level_class: 'tag-low',
+      title:    '韩文推文声量较 24h 均值下降 42%，韩国社区关注度减弱',
+      source:   'Twitter · 韩语社区',      score: -0.12, link: '#', time_ago: '4 小时前' },
+  ],
+  language_volumes: [
+    { name: '中文',        code: 'ZH', value: 32480, color: '#10b981' },
+    { name: 'English',    code: 'EN', value: 28910, color: '#6366f1' },
+    { name: '日本語',     code: 'JA', value:  9320, color: '#f59e0b' },
+    { name: '한국어',     code: 'KO', value:  7650, color: '#3b82f6' },
+    { name: 'Tiếng Việt', code: 'VI', value:  6361, color: '#ec4899' },
+  ],
+  market: {
+    price_usd:     0.09234,
+    change_24h:    2.45,
+    market_cap:    8120000000,
+    volume_24h:    450000000,
+    tvl:           8500000000,
+    price_history: _buildMockPriceHistory(),
   },
-  {
-    emoji: '🟡', tag: 'MEDIUM', tagClass: 'tag-medium',
-    msg: 'r/Tronix 情绪由正转负，负面帖占比升至 61%（阈值 60%）',
-    source: 'Reddit', time: '1 小时前',
-  },
-  {
-    emoji: '🟠', tag: 'HIGH', tagClass: 'tag-high',
-    msg: '链上单笔大额转账（>500 万 TRX）触发舆情关联异常预警',
-    source: 'TronGrid · 链上数据', time: '3 小时前',
-  },
-  {
-    emoji: '🟢', tag: 'LOW', tagClass: 'tag-low',
-    msg: '韩文推文声量较 24h 均值下降 42%，韩国社区关注度减弱',
-    source: 'Twitter · 韩语社区', time: '4 小时前',
-  },
-];
+};
 
-const LANGUAGES = [
-  { name: '中文',       code: 'ZH', value: 32480, color: '#10b981' },
-  { name: 'English',   code: 'EN', value: 28910, color: '#6366f1' },
-  { name: '日本語',    code: 'JA', value:  9320, color: '#f59e0b' },
-  { name: '한국어',    code: 'KO', value:  7650, color: '#3b82f6' },
-  { name: 'Tiếng Việt',code: 'VI', value:  6361, color: '#ec4899' },
-];
+/* ══════════════════════════════════════════════════════════
+   LIVE DATA STATE  (replaced by fetch on load)
+   ══════════════════════════════════════════════════════════ */
 
-const COMPETITORS = [
-  {
-    name: 'TRON (TRX)', emoji: '🔴',
-    logoBg: 'rgba(239,68,68,0.18)',
-    score: 72, change: +3.2, volume: '84,721',
-    barColor: '#10b981',
-  },
-  {
-    name: 'Solana (SOL)', emoji: '🟣',
-    logoBg: 'rgba(139,92,246,0.18)',
-    score: 65, change: -1.8, volume: '142,330',
-    barColor: '#8b5cf6',
-  },
-  {
-    name: 'TON Network', emoji: '🔵',
-    logoBg: 'rgba(59,130,246,0.18)',
-    score: 58, change: +0.5, volume: '38,940',
-    barColor: '#3b82f6',
-  },
-];
+let DATA = _MOCK;
 
-/* ── CLOCK ─────────────────────────────────────────────────────────────── */
+async function loadData() {
+  try {
+    const res = await fetch('./data.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    DATA = await res.json();
+
+    const src = document.getElementById('data-source');
+    const ts  = document.getElementById('data-timestamp');
+    if (src) src.textContent = 'RSS · CoinGecko · DeFiLlama';
+    if (ts && DATA.generated_at) {
+      ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
+    }
+    console.info('[Sentinel] Loaded real data from data.json');
+  } catch (e) {
+    const src = document.getElementById('data-source');
+    const ts  = document.getElementById('data-timestamp');
+    if (src) src.textContent = '模拟数据';
+    if (ts) ts.textContent = '—';
+    console.warn('[Sentinel] data.json unavailable, using mock data:', e.message);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   CLOCK
+   ══════════════════════════════════════════════════════════ */
+
 function updateClock() {
   const d = new Date();
-  const pad = n => String(n).padStart(2, '0');
+  const z = n => String(n).padStart(2, '0');
   document.getElementById('clock').textContent =
-    `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}  ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    `${d.getFullYear()}/${z(d.getMonth()+1)}/${z(d.getDate())}  ` +
+    `${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
 }
 updateClock();
 setInterval(updateClock, 1000);
 
-/* ── ALERT LIST ────────────────────────────────────────────────────────── */
-function renderAlerts() {
-  document.getElementById('alertList').innerHTML = ALERTS.map(a => `
-    <div class="alert-item">
-      <div class="alert-emoji">${a.emoji}</div>
-      <div class="alert-body">
-        <div class="alert-msg">${a.msg}</div>
-        <div class="alert-meta">
-          <span class="alert-tag ${a.tagClass}">${a.tag}</span>
-          <span class="meta-dot">·</span>
-          ${a.source}
-          <span class="meta-dot">·</span>
-          ${a.time}
-        </div>
-      </div>
-    </div>
-  `).join('');
+/* ══════════════════════════════════════════════════════════
+   OVERVIEW CARDS  (read from DATA.overview)
+   ══════════════════════════════════════════════════════════ */
+
+function updateOverview() {
+  const ov  = DATA.overview || {};
+  const $   = id => document.getElementById(id);
+  const fmt = n  => Number(n).toLocaleString('zh-CN');
+
+  if ($('stat-total'))   $('stat-total').textContent   = fmt(ov.today_total   ?? '—');
+  if ($('stat-pos'))     $('stat-pos').textContent     = ((ov.positive_pct ?? 0).toFixed(1)) + '%';
+  if ($('stat-neg'))     $('stat-neg').textContent     = ((ov.negative_pct ?? 0).toFixed(1)) + '%';
+  if ($('stat-alerts'))  $('stat-alerts').textContent  = ov.active_alerts ?? '—';
+  if ($('badge-alerts')) $('badge-alerts').textContent = (ov.active_alerts ?? '—') + ' 条';
 }
 
-/* ── COMPETITOR LIST ───────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   ALERT LIST  (read from DATA.alerts)
+   ══════════════════════════════════════════════════════════ */
+
+function renderAlerts() {
+  const list   = document.getElementById('alertList');
+  if (!list) return;
+  const alerts = DATA.alerts || [];
+  list.innerHTML = alerts.length
+    ? alerts.map(a => `
+        <a class="alert-item"
+           href="${a.link || '#'}" target="_blank" rel="noopener noreferrer"
+           style="text-decoration:none;color:inherit">
+          <div class="alert-emoji">${a.icon}</div>
+          <div class="alert-body">
+            <div class="alert-msg">${a.title}</div>
+            <div class="alert-meta">
+              <span class="alert-tag ${a.level_class}">${a.level}</span>
+              <span class="meta-dot">·</span>
+              ${a.source}
+              <span class="meta-dot">·</span>
+              ${a.time_ago}
+            </div>
+          </div>
+        </a>`).join('')
+    : '<p style="color:var(--text-3);font-size:13px;padding:12px 0">暂无负面预警</p>';
+}
+
+/* ══════════════════════════════════════════════════════════
+   MARKET CARDS  (reads DATA.market)
+   ══════════════════════════════════════════════════════════ */
+
+function updateMarket() {
+  const mk = DATA.market || {};
+  const $  = id => document.getElementById(id);
+
+  if ($('stat-price') && mk.price_usd != null) {
+    $('stat-price').textContent = '$' + (+mk.price_usd).toFixed(5);
+  }
+  if ($('stat-change') && mk.change_24h != null) {
+    const c  = +mk.change_24h;
+    const el = $('stat-change');
+    el.textContent = (c >= 0 ? '+' : '') + c.toFixed(2) + '%';
+    el.className   = c >= 0 ? 'delta-up' : 'delta-down';
+  }
+  if ($('stat-tvl') && mk.tvl != null) {
+    $('stat-tvl').textContent = '$' + (+mk.tvl / 1e9).toFixed(2) + 'B';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   7-DAY PRICE CHART  (reads DATA.market.price_history)
+   [[timestamp_ms, price_usd], …]  – hourly CoinGecko data
+   ══════════════════════════════════════════════════════════ */
+
+function drawPriceChart() {
+  const canvas = document.getElementById('priceChart');
+  if (!canvas) return;
+  const { ctx, W, H } = setupCanvas(canvas);
+
+  const raw = ((DATA.market || {}).price_history || []);
+  if (!raw.length) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '13px system-ui';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('暂无价格历史数据（等待首次 CoinGecko 采集）', W / 2, H / 2);
+    return;
+  }
+
+  /* Keep at most 168 points (7 days × 24 h) */
+  const data       = raw.slice(-168);
+  const N          = data.length;
+  const prices     = data.map(d => d[1]);
+  const timestamps = data.map(d => d[0]);
+  const minP       = Math.min(...prices);
+  const maxP       = Math.max(...prices);
+  const range      = maxP - minP || 0.0001;
+
+  const PAD = { top: 18, right: 16, bottom: 36, left: 72 };
+  const cW  = W - PAD.left - PAD.right;
+  const cH  = H - PAD.top  - PAD.bottom;
+
+  /* Y-axis grid (5 levels) */
+  for (let i = 0; i <= 4; i++) {
+    const v = minP + (range / 4) * i;
+    const y = PAD.top + cH * (1 - i / 4);
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+    ctx.lineWidth   = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#64748b'; ctx.font = '10px system-ui';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText('$' + v.toFixed(4), PAD.left - 6, y);
+  }
+
+  /* X-axis labels (one per day ≈ every N/7 points) */
+  const step = Math.max(1, Math.floor(N / 7));
+  ctx.fillStyle = '#64748b'; ctx.font = '10px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let i = 0; i < N; i += step) {
+    const x = PAD.left + (N > 1 ? (cW / (N - 1)) * i : 0);
+    const d = new Date(timestamps[i]);
+    ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, x, H - PAD.bottom + 6);
+  }
+
+  /* Pixel coordinates */
+  const pts = prices.map((v, i) => ({
+    x: PAD.left + (N > 1 ? (cW / (N - 1)) * i : cW / 2),
+    y: PAD.top  + cH * (1 - (v - minP) / range),
+  }));
+
+  /* Gradient fill */
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, PAD.top + cH);
+  ctx.lineTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    const cpx = (pts[i - 1].x + pts[i].x) / 2;
+    ctx.bezierCurveTo(cpx, pts[i-1].y, cpx, pts[i].y, pts[i].x, pts[i].y);
+  }
+  ctx.lineTo(pts[pts.length - 1].x, PAD.top + cH);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+  g.addColorStop(0,    'rgba(59,130,246,0.22)');
+  g.addColorStop(0.75, 'rgba(59,130,246,0.04)');
+  g.addColorStop(1,    'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fill();
+
+  /* Line */
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    const cpx = (pts[i - 1].x + pts[i].x) / 2;
+    ctx.bezierCurveTo(cpx, pts[i-1].y, cpx, pts[i].y, pts[i].x, pts[i].y);
+  }
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth   = 2;
+  ctx.lineJoin    = 'round';
+  ctx.lineCap     = 'round';
+  ctx.stroke();
+
+  /* Endpoint dot */
+  const last = pts[pts.length - 1];
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle   = '#3b82f6'; ctx.fill();
+  ctx.strokeStyle = '#1a1d2e'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+/* ══════════════════════════════════════════════════════════
+   COMPETITOR CARDS  (static mock – no DB source available)
+   ══════════════════════════════════════════════════════════ */
+
+const _COMPETITORS = [
+  { name: 'TRON (TRX)',   emoji: '🔴', logoBg: 'rgba(239,68,68,0.18)',
+    score: 72, change: +3.2, volume: '84,721',  barColor: '#10b981' },
+  { name: 'Solana (SOL)', emoji: '🟣', logoBg: 'rgba(139,92,246,0.18)',
+    score: 65, change: -1.8, volume: '142,330', barColor: '#8b5cf6' },
+  { name: 'TON Network',  emoji: '🔵', logoBg: 'rgba(59,130,246,0.18)',
+    score: 58, change: +0.5, volume: '38,940',  barColor: '#3b82f6' },
+];
+
 function renderCompetitors() {
-  document.getElementById('competitorList').innerHTML = COMPETITORS.map(c => {
-    const up = c.change >= 0;
-    const changeColor = up ? 'var(--accent)' : 'var(--red)';
-    const arrow = up ? '▲' : '▼';
+  const grid = document.getElementById('competitorList');
+  if (!grid) return;
+  grid.innerHTML = _COMPETITORS.map(c => {
+    const up  = c.change >= 0;
+    const col = up ? 'var(--accent)' : 'var(--red)';
+    const arr = up ? '▲' : '▼';
     return `
       <div class="comp-card">
         <div class="comp-logo" style="background:${c.logoBg}">${c.emoji}</div>
@@ -720,24 +946,19 @@ function renderCompetitors() {
             <div class="score-fill" style="width:${c.score}%;background:${c.barColor}"></div>
           </div>
         </div>
-        <div class="comp-delta" style="color:${changeColor}">
-          ${arrow} ${Math.abs(c.change)}%
-        </div>
-      </div>
-    `;
+        <div class="comp-delta" style="color:${col}">${arr} ${Math.abs(c.change)}%</div>
+      </div>`;
   }).join('');
 }
 
-/* ── CANVAS HELPERS ────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   CANVAS HELPERS
+   ══════════════════════════════════════════════════════════ */
 
-/**
- * Set canvas resolution accounting for devicePixelRatio.
- * Canvas element must already have CSS width/height set.
- */
 function setupCanvas(canvas) {
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
+  const w   = canvas.clientWidth;
+  const h   = canvas.clientHeight;
   canvas.width  = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
@@ -745,215 +966,194 @@ function setupCanvas(canvas) {
   return { ctx, W: w, H: h };
 }
 
-/* ── SENTIMENT TREND LINE CHART ────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   SENTIMENT TREND LINE CHART  (reads DATA.sentiment_trend)
+   24 hourly {hour, positive, negative, neutral} objects.
+   ══════════════════════════════════════════════════════════ */
+
 function drawSentimentChart() {
   const canvas = document.getElementById('sentimentChart');
+  if (!canvas) return;
   const { ctx, W, H } = setupCanvas(canvas);
 
-  const PAD = { top: 14, right: 24, bottom: 38, left: 46 };
-  const cW = W - PAD.left - PAD.right;
-  const cH = H - PAD.top  - PAD.bottom;
+  const trend  = DATA.sentiment_trend || [];
+  const N      = trend.length || 24;
+  const pos    = trend.map(t => t.positive);
+  const neg    = trend.map(t => t.negative);
+  const neu    = trend.map(t => t.neutral);
+  const labels = trend.map(t => t.hour);
 
-  /* Y-axis grid & labels */
-  const ySteps = [0, 25, 50, 75, 100];
-  ySteps.forEach(v => {
+  const PAD = { top: 14, right: 24, bottom: 38, left: 46 };
+  const cW  = W - PAD.left - PAD.right;
+  const cH  = H - PAD.top  - PAD.bottom;
+
+  /* Y-axis grid */
+  [0, 25, 50, 75, 100].forEach(v => {
     const y = PAD.top + cH * (1 - v / 100);
     ctx.beginPath();
     ctx.strokeStyle = 'rgba(255,255,255,0.055)';
-    ctx.lineWidth = 1;
+    ctx.lineWidth   = 1;
     ctx.setLineDash([4, 4]);
     ctx.moveTo(PAD.left, y);
     ctx.lineTo(PAD.left + cW, y);
     ctx.stroke();
     ctx.setLineDash([]);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '11px system-ui';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#64748b'; ctx.font = '11px system-ui';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
     ctx.fillText(v + '%', PAD.left - 8, y);
   });
 
-  /* X-axis hour labels (every 4 h) */
-  const now = new Date();
-  ctx.fillStyle = '#64748b';
-  ctx.font = '11px system-ui';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  for (let i = 0; i <= 23; i += 4) {
-    const x = PAD.left + (cW / 23) * i;
-    const h = (now.getHours() - 23 + i + 24) % 24;
-    ctx.fillText(String(h).padStart(2,'0') + ':00', x, H - PAD.bottom + 10);
+  /* X-axis labels every 4 slots */
+  ctx.fillStyle = '#64748b'; ctx.font = '11px system-ui';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let i = 0; i < N; i += 4) {
+    const x = PAD.left + (N > 1 ? (cW / (N - 1)) * i : 0);
+    ctx.fillText(labels[i] || '', x, H - PAD.bottom + 10);
   }
-  // Current hour label at far right
-  ctx.fillText(String(now.getHours()).padStart(2,'0') + ':00',
-    PAD.left + cW, H - PAD.bottom + 10);
+  if (N > 1) ctx.fillText(labels[N - 1] || '', PAD.left + cW, H - PAD.bottom + 10);
 
-  /* Convert data values to canvas coordinates */
-  function toPoints(data) {
+  /* Data → pixel coordinates */
+  function pts(data) {
     return data.map((v, i) => ({
-      x: PAD.left + (cW / 23) * i,
+      x: PAD.left + (N > 1 ? (cW / (N - 1)) * i : cW / 2),
       y: PAD.top  + cH * (1 - v / 100),
     }));
   }
 
-  /* Draw smooth bezier line + gradient area fill */
-  function drawLine(data, lineColor, areaColor) {
-    const pts = toPoints(data);
+  /* Bezier line + gradient fill */
+  function drawLine(data, lineColor, areaRGBA) {
+    if (!data.length) return;
+    const p = pts(data);
 
-    /* Area fill */
     ctx.beginPath();
-    ctx.moveTo(pts[0].x, PAD.top + cH);
-    ctx.lineTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) {
-      const cpx = (pts[i-1].x + pts[i].x) / 2;
-      ctx.bezierCurveTo(cpx, pts[i-1].y, cpx, pts[i].y, pts[i].x, pts[i].y);
+    ctx.moveTo(p[0].x, PAD.top + cH);
+    ctx.lineTo(p[0].x, p[0].y);
+    for (let i = 1; i < p.length; i++) {
+      const cpx = (p[i-1].x + p[i].x) / 2;
+      ctx.bezierCurveTo(cpx, p[i-1].y, cpx, p[i].y, p[i].x, p[i].y);
     }
-    ctx.lineTo(pts[pts.length-1].x, PAD.top + cH);
+    ctx.lineTo(p[p.length-1].x, PAD.top + cH);
     ctx.closePath();
-
-    const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
-    grad.addColorStop(0,   areaColor);
-    grad.addColorStop(0.7, areaColor.replace(/[\d.]+\)$/, '0.03)'));
-    grad.addColorStop(1,   'rgba(0,0,0,0)');
-    ctx.fillStyle = grad;
+    const g = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+    g.addColorStop(0,   areaRGBA);
+    g.addColorStop(0.7, areaRGBA.replace(/[\d.]+\)$/, '0.03)'));
+    g.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
     ctx.fill();
 
-    /* Smooth line */
     ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i++) {
-      const cpx = (pts[i-1].x + pts[i].x) / 2;
-      ctx.bezierCurveTo(cpx, pts[i-1].y, cpx, pts[i].y, pts[i].x, pts[i].y);
+    ctx.moveTo(p[0].x, p[0].y);
+    for (let i = 1; i < p.length; i++) {
+      const cpx = (p[i-1].x + p[i].x) / 2;
+      ctx.bezierCurveTo(cpx, p[i-1].y, cpx, p[i].y, p[i].x, p[i].y);
     }
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth   = 2;
-    ctx.lineJoin    = 'round';
-    ctx.lineCap     = 'round';
+    ctx.strokeStyle = lineColor; ctx.lineWidth = 2;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.stroke();
 
-    /* End-point dot with inner ring */
-    const last = pts[pts.length - 1];
+    const last = p[p.length - 1];
     ctx.beginPath();
     ctx.arc(last.x, last.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle   = lineColor;
-    ctx.fill();
-    ctx.strokeStyle = '#1a1d2e';
-    ctx.lineWidth   = 2;
-    ctx.stroke();
+    ctx.fillStyle = lineColor; ctx.fill();
+    ctx.strokeStyle = '#1a1d2e'; ctx.lineWidth = 2; ctx.stroke();
   }
 
-  // Draw in back-to-front order
-  drawLine(SENTIMENT.neu, '#6366f1', 'rgba(99,102,241,0.18)');
-  drawLine(SENTIMENT.neg, '#ef4444', 'rgba(239,68,68,0.18)');
-  drawLine(SENTIMENT.pos, '#10b981', 'rgba(16,185,129,0.20)');
+  drawLine(neu, '#6366f1', 'rgba(99,102,241,0.18)');
+  drawLine(neg, '#ef4444', 'rgba(239,68,68,0.18)');
+  drawLine(pos, '#10b981', 'rgba(16,185,129,0.20)');
 }
 
-/* ── LANGUAGE VOLUME BAR CHART ─────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   LANGUAGE VOLUME BAR CHART  (reads DATA.language_volumes)
+   List of {name, code, value, color} objects.
+   ══════════════════════════════════════════════════════════ */
+
 function drawLangChart() {
   const canvas = document.getElementById('langChart');
+  if (!canvas) return;
   const { ctx, W, H } = setupCanvas(canvas);
 
-  const PAD = { top: 28, right: 20, bottom: 52, left: 54 };
-  const cW = W - PAD.left - PAD.right;
-  const cH = H - PAD.top  - PAD.bottom;
+  const langs = DATA.language_volumes || [];
+  if (!langs.length) return;
 
-  const maxVal = Math.max(...LANGUAGES.map(l => l.value));
-  const n      = LANGUAGES.length;
-  const slot   = cW / n;
-  const barW   = Math.min(56, slot * 0.52);
+  const PAD  = { top: 28, right: 20, bottom: 52, left: 54 };
+  const cW   = W - PAD.left - PAD.right;
+  const cH   = H - PAD.top  - PAD.bottom;
+  const maxV = Math.max(...langs.map(l => l.value), 1);
+  const slot = cW / langs.length;
+  const barW = Math.min(56, slot * 0.52);
 
-  /* Y-axis grid (5 steps) */
+  /* Y-axis grid */
   for (let i = 0; i <= 4; i++) {
     const y   = PAD.top + (cH / 4) * i;
-    const val = Math.round(maxVal * (1 - i / 4));
+    const val = Math.round(maxV * (1 - i / 4));
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255,255,255,0.055)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.055)'; ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
-    ctx.moveTo(PAD.left, y);
-    ctx.lineTo(PAD.left + cW, y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '11px system-ui';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    const label = val >= 1000 ? (val / 1000).toFixed(0) + 'k' : String(val);
-    ctx.fillText(label, PAD.left - 8, y);
+    ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#64748b'; ctx.font = '11px system-ui';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(val >= 1000 ? (val / 1000).toFixed(0) + 'k' : String(val), PAD.left - 8, y);
   }
 
   /* Bars */
-  LANGUAGES.forEach((lang, i) => {
-    const barH = (lang.value / maxVal) * cH;
+  langs.forEach((lang, i) => {
+    const barH = (lang.value / maxV) * cH;
     const x    = PAD.left + slot * i + (slot - barW) / 2;
     const y    = PAD.top  + cH - barH;
-    const r    = 5; // corner radius
+    const r    = 5;
 
-    /* Gradient fill */
-    const grad = ctx.createLinearGradient(0, y, 0, y + barH);
-    grad.addColorStop(0,    lang.color);
-    grad.addColorStop(0.65, lang.color + 'aa');
-    grad.addColorStop(1,    lang.color + '33');
-    ctx.fillStyle = grad;
+    const g = ctx.createLinearGradient(0, y, 0, y + barH);
+    g.addColorStop(0,    lang.color);
+    g.addColorStop(0.65, lang.color + 'aa');
+    g.addColorStop(1,    lang.color + '33');
+    ctx.fillStyle = g;
 
-    /* Rounded-top bar */
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.lineTo(x + barW - r, y);
     ctx.quadraticCurveTo(x + barW, y, x + barW, y + r);
     ctx.lineTo(x + barW, y + barH);
-    ctx.lineTo(x, y + barH);
-    ctx.lineTo(x, y + r);
+    ctx.lineTo(x,        y + barH);
+    ctx.lineTo(x,        y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
     ctx.closePath();
     ctx.fill();
 
-    /* Subtle bar glow */
-    ctx.shadowColor  = lang.color;
-    ctx.shadowBlur   = 8;
-    ctx.stroke();
-    ctx.shadowBlur   = 0;
-    ctx.shadowColor  = 'transparent';
+    const cx  = x + barW / 2;
+    const vl  = lang.value >= 1000 ? (lang.value / 1000).toFixed(1) + 'k' : String(lang.value);
+    ctx.fillStyle = lang.color; ctx.font = 'bold 11.5px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(vl, cx, y - 4);
 
-    const cx = x + barW / 2;
-
-    /* Value label above bar */
-    const valLabel = lang.value >= 1000
-      ? (lang.value / 1000).toFixed(1) + 'k'
-      : String(lang.value);
-    ctx.fillStyle  = lang.color;
-    ctx.font       = 'bold 11.5px system-ui';
-    ctx.textAlign  = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(valLabel, cx, y - 4);
-
-    /* Language name */
-    ctx.fillStyle    = '#94a3b8';
-    ctx.font         = '12px system-ui';
-    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#94a3b8'; ctx.font = '12px system-ui'; ctx.textBaseline = 'top';
     ctx.fillText(lang.name, cx, PAD.top + cH + 10);
-
-    /* ISO code */
-    ctx.fillStyle = '#64748b';
-    ctx.font      = '10px system-ui';
+    ctx.fillStyle = '#64748b'; ctx.font = '10px system-ui';
     ctx.fillText(lang.code, cx, PAD.top + cH + 26);
   });
 }
 
-/* ── INIT & RESIZE ─────────────────────────────────────────────────────── */
-function renderAll() {
+/* ══════════════════════════════════════════════════════════
+   INIT  – load data.json, then render everything
+   ══════════════════════════════════════════════════════════ */
+
+async function renderAll() {
+  await loadData();      // replaces DATA with real data (or keeps mock on failure)
+  updateOverview();
+  updateMarket();
   renderAlerts();
   renderCompetitors();
   drawSentimentChart();
   drawLangChart();
+  drawPriceChart();
 }
 
 window.addEventListener('load', renderAll);
 window.addEventListener('resize', () => {
   drawSentimentChart();
   drawLangChart();
+  drawPriceChart();
 });
 </script>
 
