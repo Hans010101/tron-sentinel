@@ -706,26 +706,37 @@ const _MOCK = {
 
 let DATA = _MOCK;
 
-async function loadData() {
-  try {
-    const res = await fetch('./data.json');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    DATA = await res.json();
+/* Ordered list of data sources – tried in sequence until one succeeds. */
+const _DATA_URLS = [
+  'https://tron-sentinel-git-820917769808.us-central1.run.app/data.json',
+  './data.json',
+];
 
-    const src = document.getElementById('data-source');
-    const ts  = document.getElementById('data-timestamp');
-    if (src) src.textContent = 'RSS · CoinGecko · DeFiLlama';
-    if (ts && DATA.generated_at) {
-      ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
+async function loadData() {
+  for (const url of _DATA_URLS) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      DATA = await res.json();
+
+      const src = document.getElementById('data-source');
+      const ts  = document.getElementById('data-timestamp');
+      if (src) src.textContent = 'RSS · CoinGecko · DeFiLlama';
+      if (ts && DATA.generated_at) {
+        ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
+      }
+      console.info('[Sentinel] Loaded real data from', url);
+      return;
+    } catch (e) {
+      console.warn('[Sentinel] Failed to fetch from', url, '–', e.message);
     }
-    console.info('[Sentinel] Loaded real data from data.json');
-  } catch (e) {
-    const src = document.getElementById('data-source');
-    const ts  = document.getElementById('data-timestamp');
-    if (src) src.textContent = '模拟数据';
-    if (ts) ts.textContent = '—';
-    console.warn('[Sentinel] data.json unavailable, using mock data:', e.message);
   }
+  /* All sources failed – keep mock data */
+  const src = document.getElementById('data-source');
+  const ts  = document.getElementById('data-timestamp');
+  if (src) src.textContent = '模拟数据';
+  if (ts)  ts.textContent  = '—';
+  console.warn('[Sentinel] All data sources unavailable, using mock data.');
 }
 
 /* ══════════════════════════════════════════════════════════
