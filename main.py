@@ -28,6 +28,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
+# In the Cloud Run container __file__ is /app/main.py, so:
+#   ROOT      → /app
+#   DB_PATH   → /app/data/sentinel.db
+#   JSON_PATH → /app/dashboard/data.json   (served by entrypoint.py /data.json)
 
 ROOT      = Path(__file__).parent
 DB_PATH   = ROOT / "data"      / "sentinel.db"
