@@ -1,133 +1,115 @@
 # TRON Sentinel
 
-**TRON Sentinel** 是一套针对 TRON 生态的加密货币**实时舆情监控系统**，通过多源数据采集、AI 情感分析与可视化仪表盘，帮助投资者和项目方及时感知市场情绪变化，并在关键阈值被触发时发出多渠道告警。
+**TRON Sentinel** 是针对 TRON 生态的加密货币**实时舆情监控系统**。
+它自动抓取多个加密媒体的 RSS 新闻，用 VADER 进行情感分析，通过 Telegram 推送负面预警，并将结果呈现在可视化仪表盘中。
 
 ---
 
-## 目录结构
+## 快速启动（3 步）
 
-```
-TRON-Sentinel/
-├── collectors/                  # 数据采集模块
-│   ├── __init__.py
-│   ├── twitter_collector.py     # Twitter/X 舆情采集（Twitter API v2）
-│   ├── reddit_collector.py      # Reddit 讨论采集（PRAW）
-│   ├── news_collector.py        # 加密新闻 RSS/API 采集
-│   └── onchain_collector.py     # TRON 链上指标采集（TronGrid API）
-│
-├── analyzers/                   # AI 分析模块
-│   ├── __init__.py
-│   ├── sentiment_analyzer.py    # NLP 情感分类（HuggingFace Transformers）
-│   ├── trend_analyzer.py        # 热点话题与关键词趋势检测
-│   ├── risk_scorer.py           # 综合风险评分聚合器
-│   └── llm_analyzer.py          # LLM 深度分析（Claude API）
-│
-├── database/                    # 数据存储模块
-│   ├── __init__.py
-│   ├── models.py                # SQLAlchemy ORM 数据模型
-│   ├── db_client.py             # 数据库连接管理与查询封装
-│   └── migrations/
-│       └── 001_initial.sql      # 初始化 Schema 迁移脚本
-│
-├── alerting/                    # 告警通知模块
-│   ├── __init__.py
-│   ├── alert_manager.py         # 告警规则引擎与触发逻辑
-│   ├── telegram_notifier.py     # Telegram Bot 推送
-│   ├── email_notifier.py        # 邮件告警（SMTP）
-│   └── webhook_notifier.py      # Webhook 推送（Slack / Discord 等）
-│
-├── dashboard/                   # 前端仪表盘模块
-│   ├── __init__.py
-│   ├── app.py                   # FastAPI 应用入口（含 WebSocket）
-│   ├── api/
-│   │   └── routes.py            # REST API 路由定义
-│   └── static/
-│       └── index.html           # 前端页面入口
-│
-├── config/                      # 配置模块
-│   ├── __init__.py
-│   ├── settings.py              # Pydantic Settings 配置加载器
-│   ├── config.example.yaml      # 配置文件示例（请复制为 config.yaml）
-│   └── logging.yaml             # 日志配置（RotatingFileHandler）
-│
-├── logs/                        # 运行日志（自动生成）
-├── requirements.txt             # Python 依赖清单
-└── README.md                    # 本文档
-```
-
----
-
-## 核心功能
-
-| 模块 | 功能 |
-|------|------|
-| **collectors** | 多源数据采集：社交媒体、新闻、链上指标，支持定时轮询 |
-| **analyzers** | 情感分析（RoBERTa）、热点趋势检测、LLM 深度解读（Claude） |
-| **database** | PostgreSQL 持久化存储，SQLAlchemy ORM + Alembic 迁移 |
-| **alerting** | 规则引擎驱动的多渠道告警：Telegram、Email、Webhook |
-| **dashboard** | FastAPI + WebSocket 实时仪表盘，REST API 对外暴露数据 |
-| **config** | YAML + 环境变量统一配置，Pydantic 类型校验 |
-
----
-
-## 快速开始
-
-### 1. 克隆仓库
+### 第 1 步：安装依赖
 
 ```bash
 git clone https://github.com/Hans010101/TRON-Sentinel.git
 cd TRON-Sentinel
-```
 
-### 2. 安装依赖
-
-```bash
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. 配置
+### 第 2 步：运行数据流水线
 
 ```bash
-cp config/config.example.yaml config/config.yaml
-# 编辑 config.yaml，填入 API 密钥、数据库连接等信息
+python main.py
 ```
 
-### 4. 初始化数据库
+该命令依次执行：
+1. **RSS 采集** — 从 CoinDesk、Decrypt、CoinTelegraph、BlockBeats 抓取最新文章，存入 `data/sentinel.db`
+2. **情感分析** — 用 VADER 对未打分文章评分（`-1.0 → +1.0`），标注 positive / neutral / negative
+3. **Telegram 预警** — 将最新负面文章推送至 Telegram（未配置 token 时自动切换为控制台干运行模式）
+4. **生成仪表盘数据** — 写出 `dashboard/data.json` 供前端读取
+
+### 第 3 步：查看仪表盘
 
 ```bash
-psql -U postgres -d tron_sentinel -f database/migrations/001_initial.sql
+python -m http.server 8080
+# 浏览器访问 http://localhost:8080/dashboard/
 ```
 
-### 5. 启动服务
+> **注意**：仪表盘通过 `fetch('./data.json')` 加载数据，需要 HTTP 服务器；直接用 `file://` 打开会回退到内置模拟数据。
+
+---
+
+## 定时运行（可选）
 
 ```bash
-# 启动仪表盘服务
-uvicorn dashboard.app:app --host 0.0.0.0 --port 8000 --reload
+# 每 30 分钟自动执行一次完整流水线
+python scheduler.py
+
+# 只执行一次后退出
+python scheduler.py --once
 ```
+
+---
+
+## 模块说明
+
+| 文件 | 功能 |
+|------|------|
+| `main.py` | 流水线编排：按顺序执行采集 → 分析 → 预警 → JSON 生成，打印每步耗时 |
+| `scheduler.py` | APScheduler 定时任务，每 30 分钟调用 `main.main()`，支持 `--once` 参数 |
+| `collectors/rss_collector.py` | RSS 采集器：feedparser 抓取 4 个加密媒体源，去重后存入 SQLite |
+| `analyzers/sentiment_analyzer.py` | VADER 情感分析器：批量处理未打分行，写回 `sentiment_score` 和 `sentiment_label` |
+| `alerting/telegram_alerter.py` | Telegram 预警：4 级告警（🔴CRITICAL / 🟠HIGH / 🟡MEDIUM / 🟢LOW），支持干运行 |
+| `dashboard/index.html` | 单文件静态仪表盘：概览卡片、24h 情感趋势图、预警列表、语言分布图 |
+| `dashboard/data.json` | 由 `main.py` 每次运行后自动生成，仪表盘通过 fetch 加载（git 忽略） |
+| `data/sentinel.db` | SQLite 数据库（git 忽略，首次运行自动创建） |
+| `config/config.example.yaml` | 配置文件示例，复制为 `config.yaml` 后填入密钥 |
+
+---
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot 令牌（从 @BotFather 获取） | 空（干运行模式） |
+| `TELEGRAM_CHAT_ID` | 接收预警的 Telegram 聊天 / 频道 ID | 空 |
+
+未设置 `TELEGRAM_BOT_TOKEN` 时，预警内容将打印到控制台，不会抛出异常。
+
+---
+
+## 告警级别
+
+| 级别 | 情感分阈值 | 含义 |
+|------|-----------|------|
+| 🔴 CRITICAL | `< -0.70` | 极度负面，需立即关注 |
+| 🟠 HIGH | `< -0.50` | 高度负面 |
+| 🟡 MEDIUM | `< -0.30` | 中度负面 |
+| 🟢 LOW | `< -0.05` | 轻度负面 |
+
+---
+
+## RSS 数据源
+
+| 媒体 | 语言 | 地址 |
+|------|------|------|
+| CoinDesk | EN | `https://www.coindesk.com/arc/outboundfeeds/rss/` |
+| Decrypt | EN | `https://decrypt.co/feed` |
+| CoinTelegraph | EN | `https://cointelegraph.com/rss` |
+| BlockBeats | ZH | `https://www.theblockbeats.info/rss` |
 
 ---
 
 ## 技术栈
 
 - **语言**：Python 3.11+
-- **Web 框架**：FastAPI + Uvicorn
-- **数据库**：PostgreSQL（可选 TimescaleDB 时序扩展）+ Redis
-- **NLP 模型**：`cardiffnlp/twitter-roberta-base-sentiment-latest`
-- **LLM**：Anthropic Claude（`claude-sonnet-4-6`）
-- **任务调度**：APScheduler / Celery
-- **监控**：Prometheus + Structlog
-
----
-
-## 告警阈值（默认值，可在 config.yaml 中调整）
-
-| 规则 | 默认阈值 | 说明 |
-|------|---------|------|
-| 情感骤降 | `-0.3` | 综合分数单次下跌超过 0.3 |
-| 负面占比 | `60%` | 采集窗口内负面内容超过 60% |
-| 量级突增 | `3×` | 内容发布量超过 24h 均值的 3 倍 |
+- **数据库**：SQLite（WAL 模式，零配置）
+- **NLP**：VADER (`vaderSentiment 3.3.2`)
+- **RSS 解析**：feedparser 6.0.x
+- **任务调度**：APScheduler 3.10.x
+- **仪表盘**：原生 HTML + CSS + Canvas（无框架依赖）
 
 ---
 

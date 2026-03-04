@@ -1,0 +1,30 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# TRON Sentinel – production / Docker dependencies
+#
+# This file contains ONLY the packages actually imported at runtime.
+# It intentionally excludes:
+#   • torch / transformers  (we use VADER, not HuggingFace models)
+#   • tweepy / praw         (Twitter / Reddit collectors not yet deployed)
+#   • FastAPI / uvicorn     (dashboard is served by Cloud Storage, not Python)
+#   • SQLAlchemy / asyncpg  (we use plain sqlite3 from the stdlib)
+#   • redis / celery        (not used in current implementation)
+#   • pandas / numpy        (not used in current implementation)
+#
+# Use requirements.txt for a full dev environment (includes ML + test tools).
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Data collection ───────────────────────────────────────────────────────────
+feedparser==6.0.11          # RSS / Atom feed parsing
+telethon==1.36.0            # Telegram MTProto client (channel scraping)
+
+# ── NLP / Sentiment analysis ──────────────────────────────────────────────────
+vaderSentiment==3.3.2       # Rule-based English sentiment (no GPU needed)
+
+# ── Scheduling ────────────────────────────────────────────────────────────────
+apscheduler==3.10.4         # Periodic pipeline execution
+
+# ── Google Cloud ──────────────────────────────────────────────────────────────
+google-cloud-storage==2.19.0  # Upload dashboard/data.json to GCS bucket
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1        # Optional .env file support for local dev
