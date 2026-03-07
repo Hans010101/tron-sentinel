@@ -29,6 +29,7 @@ logger = logging.getLogger("sentinel.entrypoint")
 
 # Absolute path to the generated data file inside the container (/app/…)
 DATA_JSON = Path(__file__).parent / "dashboard" / "data.json"
+INDEX_HTML = Path(__file__).parent / "dashboard" / "index.html"
 
 
 # ── HTTP handler ──────────────────────────────────────────────────────────────
@@ -39,12 +40,29 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self.path.split("?")[0].rstrip("/") or "/"
-        if path in ("/health", "/"):
+        if path == "/health":
             self._send(200, b"OK", "text/plain; charset=utf-8")
+        elif path == "/":
+            self._serve_index()
         elif path == "/data.json":
             self._serve_data_json()
         else:
             self._send(404, b"Not Found", "text/plain; charset=utf-8")
+
+    # ------------------------------------------------------------------
+
+    def _serve_index(self) -> None:
+        """Return dashboard/index.html."""
+        try:
+            body = INDEX_HTML.read_bytes()
+        except OSError:
+            self._send(500, b"index.html not found", "text/plain; charset=utf-8")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     # ------------------------------------------------------------------
 
