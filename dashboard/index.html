@@ -705,38 +705,68 @@ const _MOCK = {
    ══════════════════════════════════════════════════════════ */
 
 let DATA = _MOCK;
+let _dataLoaded = false;
 
-/* Ordered list of data sources – tried in sequence until one succeeds. */
-const _DATA_URLS = [
-  '/data.json',
-  './data.json',
-];
+async function _fetchWithTimeout(url, timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
 
 async function loadData() {
-  for (const url of _DATA_URLS) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      DATA = await res.json();
+  try {
+    const res = await _fetchWithTimeout('/data.json', 120000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    DATA = await res.json();
+    _dataLoaded = true;
 
-      const src = document.getElementById('data-source');
-      const ts  = document.getElementById('data-timestamp');
-      if (src) src.textContent = 'RSS · CoinGecko · DeFiLlama';
-      if (ts && DATA.generated_at) {
-        ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
-      }
-      console.info('[Sentinel] Loaded real data from', url);
-      return;
-    } catch (e) {
-      console.warn('[Sentinel] Failed to fetch from', url, '–', e.message);
+    const src = document.getElementById('data-source');
+    const ts  = document.getElementById('data-timestamp');
+    if (src) src.textContent = 'RSS · CoinGecko · DeFiLlama';
+    if (ts && DATA.generated_at) {
+      ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
     }
+    console.info('[Sentinel] Loaded real data from /data.json');
+    return;
+  } catch (e) {
+    console.warn('[Sentinel] Failed to fetch /data.json:', e.message);
   }
-  /* All sources failed – keep mock data */
+  /* Fetch failed – keep mock data, schedule retry */
   const src = document.getElementById('data-source');
   const ts  = document.getElementById('data-timestamp');
-  if (src) src.textContent = '模拟数据';
+  if (src) src.textContent = '模拟数据（加载中...）';
   if (ts)  ts.textContent  = '—';
-  console.warn('[Sentinel] All data sources unavailable, using mock data.');
+  console.warn('[Sentinel] Using mock data, will retry in 15s.');
+  setTimeout(retryLoad, 15000);
+}
+
+async function retryLoad() {
+  if (_dataLoaded) return;
+  try {
+    const res = await _fetchWithTimeout('/data.json', 120000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    DATA = await res.json();
+    _dataLoaded = true;
+    console.info('[Sentinel] Retry succeeded – rendering real data.');
+    const src = document.getElementById('data-source');
+    const ts  = document.getElementById('data-timestamp');
+    if (src) src.textContent = 'RSS · CoinGecko · DeFiLlama';
+    if (ts && DATA.generated_at) {
+      ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
+    }
+    updateOverview(); updateMarket(); renderAlerts();
+    drawSentimentChart(); drawLangChart(); drawPriceChart();
+  } catch (e) {
+    console.warn('[Sentinel] Retry failed:', e.message, '– retrying in 15s.');
+    setTimeout(retryLoad, 15000);
+  }
 }
 
 /* ══════════════════════════════════════════════════════════
