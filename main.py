@@ -25,6 +25,18 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# Load .env file for local development (Cloud Run uses Secret Manager)
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    _raw = _env_path.read_bytes()
+    # Handle UTF-16 LE BOM (common on Windows)
+    _text = _raw.decode("utf-16") if _raw[:2] == b"\xff\xfe" else _raw.decode("utf-8-sig")
+    for line in _text.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, _, val = line.partition("=")
+            os.environ.setdefault(key.strip(), val.strip())
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 # In the Cloud Run container __file__ is /app/main.py, so:
 #   ROOT      → /app
@@ -189,6 +201,16 @@ def _latest_market(conn: sqlite3.Connection, source: str) -> dict:
     }
 
 
+def _ensure_sentiment_columns(conn: sqlite3.Connection) -> None:
+    """Add sentiment_label and sentiment_score columns if they don't exist yet."""
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(raw_articles)")}
+    if "sentiment_label" not in existing:
+        conn.execute("ALTER TABLE raw_articles ADD COLUMN sentiment_label TEXT")
+    if "sentiment_score" not in existing:
+        conn.execute("ALTER TABLE raw_articles ADD COLUMN sentiment_score REAL")
+    conn.commit()
+
+
 def build_dashboard_json(conn: sqlite3.Connection) -> dict:
     """
     Query raw_articles and market_data and return the full dashboard payload.
@@ -209,6 +231,9 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
     now       = datetime.now(timezone.utc)
     today_pfx = now.strftime("%Y-%m-%d")
     cutoff_24 = (now - timedelta(hours=24)).isoformat()
+
+    # Ensure sentiment columns exist (added by sentiment analyzer when it runs)
+    _ensure_sentiment_columns(conn)
 
     # ── Overview ───────────────────────────────────────────────────────────────
     today_total = conn.execute(

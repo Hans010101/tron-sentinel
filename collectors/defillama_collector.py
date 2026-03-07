@@ -4,7 +4,7 @@ collectors/defillama_collector.py
 DeFiLlama API collector for TRON TVL data.
 
 Endpoint:
-    GET https://api.llama.fi/tvl/tron
+    GET https://api.llama.fi/v2/chains  (find Tron entry)
 
 Stores data in the market_data table alongside CoinGecko data.
 """
@@ -21,8 +21,7 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = Path(__file__).parent.parent / "data" / "sentinel.db"
 
-_TVL_URL = "https://api.llama.fi/tvl/tron"
-_PROTOCOL_URL = "https://api.llama.fi/v2/chains"
+_CHAINS_URL = "https://api.llama.fi/v2/chains"
 
 _HEADERS = {
     "Accept": "application/json",
@@ -64,18 +63,21 @@ def open_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def _http_get_text(url: str) -> str:
+def _http_get_json(url: str) -> list | dict:
     req = urllib.request.Request(url, headers=_HEADERS)
     with urllib.request.urlopen(req, timeout=15) as resp:
-        return resp.read().decode()
+        return json.loads(resp.read().decode())
 
 
 def collect(conn: sqlite3.Connection) -> bool:
     """Fetch TRON TVL from DeFiLlama and insert one row. Returns True on success."""
     try:
-        # The /tvl/tron endpoint returns a bare number
-        tvl_text = _http_get_text(_TVL_URL).strip()
-        tvl = float(tvl_text)
+        chains = _http_get_json(_CHAINS_URL)
+        tron = next((c for c in chains if c.get("name", "").lower() == "tron"), None)
+        if not tron:
+            logger.error("DeFiLlama: Tron chain not found in /v2/chains")
+            return False
+        tvl = float(tron["tvl"])
         logger.info("DeFiLlama TRON TVL: $%.2fB", tvl / 1e9)
 
         row = {
