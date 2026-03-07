@@ -9,7 +9,7 @@ Serves two HTTP routes on $PORT (default 8080):
                        Triggers a pipeline run on first request if
                        dashboard/data.json does not yet exist.
 
-A background daemon thread runs the APScheduler pipeline every 30 min
+A background daemon thread runs the APScheduler pipeline every 4 hours
 so the data file stays fresh without any external cron job.
 """
 
