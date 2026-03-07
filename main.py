@@ -4,13 +4,18 @@ main.py
 TRON Sentinel – full data pipeline orchestrator.
 
 Executes in order:
-    Step 1  RSS collection          collectors/rss_collector.py
-    Step 2  Apify Twitter/X         collectors/apify_collector.py
-    Step 3  Apify Google Search     collectors/apify_collector.py
-    Step 4  CoinGecko market data   collectors/coingecko_collector.py
-    Step 5  DeFiLlama TVL data      collectors/defillama_collector.py
-    Step 6  Baidu News RSS          collectors/baidu_collector.py
-    Step 7  CryptoPanic API         collectors/crypto_panic_collector.py
+    Step 1   RSS collection          collectors/rss_collector.py
+    Step 2   Apify Twitter/X         collectors/apify_collector.py
+    Step 3   Apify Google Search     collectors/apify_collector.py
+    Step 4   Apify YouTube           collectors/apify_collector.py
+    Step 5   Apify Reddit            collectors/apify_collector.py
+    Step 6   Apify TikTok            collectors/apify_collector.py
+    Step 7   Apify Weibo             collectors/apify_collector.py
+    Step 8   Bilibili Search         collectors/bilibili_collector.py
+    Step 9   CoinGecko market data   collectors/coingecko_collector.py
+    Step 10  DeFiLlama TVL data      collectors/defillama_collector.py
+    Step 11  Baidu News RSS          collectors/baidu_collector.py
+    Step 12  CryptoPanic API         collectors/crypto_panic_collector.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -62,7 +67,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 7          # update when adding / removing pipeline steps
+_TOTAL_STEPS = 12         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -118,6 +123,56 @@ def do_collect_apify_google() -> int:
     conn = open_db(DB_PATH)
     try:
         return collect_google_news(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_apify_youtube() -> int:
+    """Apify YouTube collector → returns count of newly inserted videos."""
+    from collectors.apify_collector import open_db, collect_youtube  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_youtube(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_apify_reddit() -> int:
+    """Apify Reddit collector → returns count of newly inserted posts."""
+    from collectors.apify_collector import open_db, collect_reddit  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_reddit(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_apify_tiktok() -> int:
+    """Apify TikTok collector → returns count of newly inserted videos."""
+    from collectors.apify_collector import open_db, collect_tiktok  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_tiktok(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_apify_weibo() -> int:
+    """Apify Weibo collector → returns count of newly inserted posts."""
+    from collectors.apify_collector import open_db, collect_weibo  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_weibo(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_bilibili() -> int:
+    """Bilibili search collector → returns count of newly inserted videos."""
+    from collectors.bilibili_collector import open_db, collect_bilibili  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_bilibili(conn)
     finally:
         conn.close()
 
@@ -452,21 +507,56 @@ def main() -> None:
         print(f"     新增文章 : {val} 条")
 
     # ── Step 2: Apify Twitter/X ────────────────────────────────────────────────
-    val, ok = run_step(2, "Apify Twitter/X 采集（TRON / TRX 相关推文）",
+    val, ok = run_step(2, "Apify Twitter/X 采集（Justin Sun / 孙宇晨 / TRON）",
                        do_collect_apify_twitter)
     step_ok["apify_twitter"] = ok
     if ok:
         print(f"     新增推文 : {val} 条")
 
     # ── Step 3: Apify Google Search News ───────────────────────────────────────
-    val, ok = run_step(3, "Apify Google 新闻采集（TRON / TRX / Justin Sun）",
+    val, ok = run_step(3, "Apify Google 新闻采集（Justin Sun / TRON / 波场）",
                        do_collect_apify_google)
     step_ok["apify_google"] = ok
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 4: CoinGecko market data ─────────────────────────────────────────
-    val, ok = run_step(4, "CoinGecko TRX 市场数据", do_collect_coingecko)
+    # ── Step 4: Apify YouTube ──────────────────────────────────────────────────
+    val, ok = run_step(4, "Apify YouTube 视频采集（Justin Sun / TRON / 波场）",
+                       do_collect_apify_youtube)
+    step_ok["apify_youtube"] = ok
+    if ok:
+        print(f"     新增视频 : {val} 条")
+
+    # ── Step 5: Apify Reddit ───────────────────────────────────────────────────
+    val, ok = run_step(5, "Apify Reddit 帖子采集（TRON TRX / Justin Sun）",
+                       do_collect_apify_reddit)
+    step_ok["apify_reddit"] = ok
+    if ok:
+        print(f"     新增帖子 : {val} 条")
+
+    # ── Step 6: Apify TikTok ──────────────────────────────────────────────────
+    val, ok = run_step(6, "Apify TikTok 视频采集（TRON / Justin Sun / 波场）",
+                       do_collect_apify_tiktok)
+    step_ok["apify_tiktok"] = ok
+    if ok:
+        print(f"     新增视频 : {val} 条")
+
+    # ── Step 7: Apify Weibo ───────────────────────────────────────────────────
+    val, ok = run_step(7, "Apify 微博采集（波场 / 孙宇晨 相关微博）",
+                       do_collect_apify_weibo)
+    step_ok["apify_weibo"] = ok
+    if ok:
+        print(f"     新增微博 : {val} 条")
+
+    # ── Step 8: Bilibili ──────────────────────────────────────────────────────
+    val, ok = run_step(8, "Bilibili 视频搜索（孙宇晨 / 波场TRON）",
+                       do_collect_bilibili)
+    step_ok["bilibili"] = ok
+    if ok:
+        print(f"     新增视频 : {val} 条")
+
+    # ── Step 9: CoinGecko market data ─────────────────────────────────────────
+    val, ok = run_step(9, "CoinGecko TRX 市场数据", do_collect_coingecko)
     step_ok["coingecko"] = ok
     if ok and val:
         try:
@@ -483,8 +573,8 @@ def main() -> None:
         except Exception:
             pass
 
-    # ── Step 5: DeFiLlama TVL ─────────────────────────────────────────────────
-    val, ok = run_step(5, "DeFiLlama TRON TVL 数据", do_collect_defillama)
+    # ── Step 10: DeFiLlama TVL ────────────────────────────────────────────────
+    val, ok = run_step(10, "DeFiLlama TRON TVL 数据", do_collect_defillama)
     step_ok["defillama"] = ok
     if ok and val:
         try:
@@ -499,15 +589,15 @@ def main() -> None:
         except Exception:
             pass
 
-    # ── Step 6: Baidu News ──────────────────────────────────────────────────
-    val, ok = run_step(6, "百度新闻采集（波场 / 孙宇晨 / TRX）",
+    # ── Step 11: Baidu News ─────────────────────────────────────────────────
+    val, ok = run_step(11, "百度新闻采集（波场 / 孙宇晨）",
                        do_collect_baidu)
     step_ok["baidu"] = ok
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 7: CryptoPanic ─────────────────────────────────────────────────
-    val, ok = run_step(7, "CryptoPanic TRX 新闻采集",
+    # ── Step 12: CryptoPanic ────────────────────────────────────────────────
+    val, ok = run_step(12, "CryptoPanic TRX 新闻采集",
                        do_collect_crypto_panic)
     step_ok["crypto_panic"] = ok
     if ok:

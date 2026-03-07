@@ -3,9 +3,13 @@ collectors/apify_collector.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Apify-powered data collectors for TRON Sentinel.
 
-Uses the Apify REST API to run two Actors:
+Uses the Apify REST API to run Actors:
     1. Twitter/X Tweet Scraper  (kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest)
     2. Google Search Scraper    (apify/google-search-scraper)
+    3. YouTube Search Scraper   (scrapesmith/youtube-free-search-scraper)
+    4. Reddit Posts Scraper     (vulnv/reddit-posts-search-scraper)
+    5. TikTok Scraper           (clockworks/tiktok-scraper)
+    6. Weibo Scraper            (piotrv1001/weibo-scraper)
 
 Collected data is stored in the same ``raw_articles`` SQLite table used
 by the RSS collector, so the dashboard and sentiment pipeline work
@@ -156,8 +160,11 @@ def _get_dataset_items(dataset_id: str, token: str,
 _TWITTER_ACTOR = "kaitoeasyapi~twitter-x-data-tweet-scraper-pay-per-result-cheapest"
 
 _TWITTER_INPUT = {
-    "twitterContent": "TRON OR #TRON OR #TRX OR $TRX crypto",
-    "maxItems": 30,
+    "twitterContent": (
+        "\"Justin Sun\" OR \"孙宇晨\" OR \"TRON Network\" OR #TRX "
+        "OR #TRON OR $TRX OR TRON crypto"
+    ),
+    "maxItems": 50,
     "queryType": "Latest",
     "lang": "en",
 }
@@ -175,7 +182,7 @@ def collect_twitter(conn: sqlite3.Connection, token: str | None = None) -> int:
         logger.warning("Twitter collection: no dataset returned")
         return 0
 
-    items = _get_dataset_items(dataset_id, token, limit=30)
+    items = _get_dataset_items(dataset_id, token, limit=50)
     logger.info("Twitter: fetched %d items from dataset", len(items))
 
     now_utc = datetime.now(tz=timezone.utc).isoformat()
@@ -340,28 +347,367 @@ def collect_google_news(conn: sqlite3.Connection,
     return inserted
 
 
+# ── YouTube collector ─────────────────────────────────────────────────────────
+
+_YOUTUBE_ACTOR = "scrapesmith~youtube-free-search-scraper"
+
+_YOUTUBE_QUERIES = [
+    "Justin Sun TRON",
+    "波场 孙宇晨",
+    "TRON blockchain",
+]
+
+
+def collect_youtube(conn: sqlite3.Connection, token: str | None = None) -> int:
+    """
+    Run the YouTube Search Scraper Actor and store results in raw_articles.
+    Returns count of newly inserted rows.
+    """
+    token = token or _get_token()
+    input_data = {
+        "searchQueries": _YOUTUBE_QUERIES,
+        "videosPerSearch": 15,
+    }
+    dataset_id = _run_actor(_YOUTUBE_ACTOR, input_data, token,
+                            poll_interval=8, max_wait=180)
+    if not dataset_id:
+        logger.warning("YouTube collection: no dataset returned")
+        return 0
+
+    items = _get_dataset_items(dataset_id, token, limit=50)
+    logger.info("YouTube: fetched %d items from dataset", len(items))
+
+    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    inserted = 0
+    cur = conn.cursor()
+
+    for video in items:
+        title = video.get("title", "").strip()
+        url = video.get("url") or video.get("link", "")
+        if not title or not url:
+            continue
+        if _is_noise_title(title):
+            continue
+
+        channel = video.get("channelName") or video.get("channel", "unknown")
+        views = video.get("viewCount") or video.get("views", 0)
+        published = video.get("publishedAt") or video.get("date", "")
+
+        published_at = now_utc
+        if published:
+            try:
+                dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                published_at = dt.isoformat()
+            except (ValueError, TypeError):
+                published_at = now_utc
+
+        summary = f"Channel: {channel} | Views: {views}"
+
+        row = {
+            "title": title,
+            "link": url,
+            "published_at": published_at,
+            "source": f"YouTube ({channel})",
+            "summary": summary[:500],
+            "language": "en",
+            "collected_at": now_utc,
+        }
+        cur.execute(_INSERT, row)
+        inserted += cur.rowcount
+
+    conn.commit()
+    logger.info("YouTube: inserted %d new videos", inserted)
+    return inserted
+
+
+# ── Reddit collector ──────────────────────────────────────────────────────────
+
+_REDDIT_ACTOR = "vulnv~reddit-posts-search-scraper"
+
+_REDDIT_SEARCHES = [
+    {"keyword": "TRON TRX", "limit": 25, "sort": "new", "time_filter": "week"},
+    {"keyword": "Justin Sun", "limit": 25, "sort": "new", "time_filter": "week"},
+]
+
+
+def collect_reddit(conn: sqlite3.Connection, token: str | None = None) -> int:
+    """
+    Run the Reddit Posts Scraper Actor for each keyword and store results.
+    Returns count of newly inserted rows.
+    """
+    token = token or _get_token()
+    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    inserted = 0
+    cur = conn.cursor()
+
+    for search in _REDDIT_SEARCHES:
+        dataset_id = _run_actor(_REDDIT_ACTOR, search, token,
+                                poll_interval=8, max_wait=180)
+        if not dataset_id:
+            logger.warning("Reddit collection for '%s': no dataset", search["keyword"])
+            continue
+
+        items = _get_dataset_items(dataset_id, token, limit=30)
+        logger.info("Reddit '%s': fetched %d items", search["keyword"], len(items))
+
+        for post in items:
+            title = post.get("title", "").strip()
+            url = post.get("url") or post.get("permalink", "")
+            if not title or not url:
+                continue
+            if _is_noise_title(title):
+                continue
+
+            # Ensure full Reddit URL
+            if url.startswith("/r/"):
+                url = f"https://www.reddit.com{url}"
+
+            subreddit = post.get("subreddit", "")
+            score = post.get("score") or post.get("ups", 0)
+            num_comments = post.get("num_comments") or post.get("comments", 0)
+            selftext = post.get("selftext") or post.get("body", "")
+            created = post.get("created_utc") or post.get("created", "")
+
+            published_at = now_utc
+            if created:
+                try:
+                    if isinstance(created, (int, float)):
+                        dt = datetime.fromtimestamp(created, tz=timezone.utc)
+                        published_at = dt.isoformat()
+                    else:
+                        dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+                        published_at = dt.isoformat()
+                except (ValueError, TypeError, OSError):
+                    pass
+
+            summary = (
+                f"r/{subreddit} | Score: {score} | Comments: {num_comments}\n"
+                f"{selftext[:300]}"
+            )
+
+            row = {
+                "title": title,
+                "link": url,
+                "published_at": published_at,
+                "source": f"Reddit (r/{subreddit})" if subreddit else "Reddit",
+                "summary": summary[:500],
+                "language": "en",
+                "collected_at": now_utc,
+            }
+            cur.execute(_INSERT, row)
+            inserted += cur.rowcount
+
+    conn.commit()
+    logger.info("Reddit: inserted %d new posts", inserted)
+    return inserted
+
+
+# ── TikTok collector ──────────────────────────────────────────────────────────
+
+_TIKTOK_ACTOR = "clockworks~tiktok-scraper"
+
+_TIKTOK_QUERIES = ["TRON crypto", "Justin Sun", "波场"]
+
+
+def collect_tiktok(conn: sqlite3.Connection, token: str | None = None) -> int:
+    """
+    Run the TikTok Scraper Actor and store results in raw_articles.
+    Returns count of newly inserted rows.
+    """
+    token = token or _get_token()
+    input_data = {
+        "searchQueries": _TIKTOK_QUERIES,
+        "resultsPerPage": 15,
+    }
+    dataset_id = _run_actor(_TIKTOK_ACTOR, input_data, token,
+                            poll_interval=10, max_wait=240)
+    if not dataset_id:
+        logger.warning("TikTok collection: no dataset returned")
+        return 0
+
+    items = _get_dataset_items(dataset_id, token, limit=50)
+    logger.info("TikTok: fetched %d items from dataset", len(items))
+
+    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    inserted = 0
+    cur = conn.cursor()
+
+    for video in items:
+        desc = video.get("text") or video.get("desc") or video.get("description", "")
+        if not desc or len(desc.strip()) < 5:
+            continue
+
+        url = video.get("webVideoUrl") or video.get("url", "")
+        video_id = video.get("id", "")
+        if not url and video_id:
+            url = f"https://www.tiktok.com/@unknown/video/{video_id}"
+        if not url:
+            continue
+
+        if _is_noise_title(desc):
+            continue
+
+        author_info = video.get("authorMeta") or video.get("author", {})
+        if isinstance(author_info, dict):
+            author = author_info.get("name") or author_info.get("nickName", "unknown")
+        else:
+            author = str(author_info) if author_info else "unknown"
+
+        likes = video.get("diggCount") or video.get("likes", 0)
+        comments = video.get("commentCount") or video.get("comments", 0)
+        plays = video.get("playCount") or video.get("plays", 0)
+        created = video.get("createTimeISO") or video.get("createTime", "")
+
+        published_at = now_utc
+        if created:
+            try:
+                if isinstance(created, (int, float)):
+                    dt = datetime.fromtimestamp(created, tz=timezone.utc)
+                    published_at = dt.isoformat()
+                else:
+                    dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+                    published_at = dt.isoformat()
+            except (ValueError, TypeError, OSError):
+                pass
+
+        title = f"@{author}: {desc[:120]}"
+        summary = (
+            f"{desc[:300]}\n\n"
+            f"Likes: {likes} | Comments: {comments} | Plays: {plays}"
+        )
+
+        row = {
+            "title": title,
+            "link": url,
+            "published_at": published_at,
+            "source": "TikTok (Apify)",
+            "summary": summary[:500],
+            "language": "en",
+            "collected_at": now_utc,
+        }
+        cur.execute(_INSERT, row)
+        inserted += cur.rowcount
+
+    conn.commit()
+    logger.info("TikTok: inserted %d new videos", inserted)
+    return inserted
+
+
+# ── Weibo collector ───────────────────────────────────────────────────────────
+
+_WEIBO_ACTOR = "piotrv1001~weibo-scraper"
+
+_WEIBO_RELEVANCE_KEYWORDS = (
+    "tron", "trx", "波场", "孙宇晨", "justin sun", "usdd",
+    "bittorrent", "sunpump", "sun yuchen",
+)
+
+
+def collect_weibo(conn: sqlite3.Connection, token: str | None = None) -> int:
+    """
+    Run the Weibo Scraper Actor and store TRON-related posts.
+    The actor scrapes Weibo's main feed; we filter for TRON relevance.
+    Returns count of newly inserted rows.
+    """
+    token = token or _get_token()
+    input_data = {"limit": 100}
+    dataset_id = _run_actor(_WEIBO_ACTOR, input_data, token,
+                            poll_interval=10, max_wait=180)
+    if not dataset_id:
+        logger.warning("Weibo collection: no dataset returned")
+        return 0
+
+    items = _get_dataset_items(dataset_id, token, limit=100)
+    logger.info("Weibo: fetched %d items from dataset", len(items))
+
+    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    inserted = 0
+    cur = conn.cursor()
+
+    for post in items:
+        text = post.get("text") or post.get("content", "")
+        if not text or len(text.strip()) < 10:
+            continue
+
+        # Filter for TRON relevance (Weibo feed is general)
+        text_lower = text.lower()
+        if not any(kw in text_lower for kw in _WEIBO_RELEVANCE_KEYWORDS):
+            continue
+
+        url = post.get("url") or post.get("link", "")
+        post_id = post.get("id") or post.get("mid", "")
+        if not url and post_id:
+            url = f"https://weibo.com/{post_id}"
+        if not url:
+            continue
+
+        user_info = post.get("user") or {}
+        if isinstance(user_info, dict):
+            user_name = user_info.get("screen_name") or user_info.get("name", "unknown")
+        else:
+            user_name = "unknown"
+
+        likes = post.get("attitudes_count") or post.get("likes", 0)
+        comments = post.get("comments_count") or post.get("comments", 0)
+        reposts = post.get("reposts_count") or post.get("reposts", 0)
+        created = post.get("created_at", "")
+
+        published_at = now_utc
+        if created:
+            try:
+                dt = datetime.strptime(created, "%a %b %d %H:%M:%S %z %Y")
+                published_at = dt.isoformat()
+            except (ValueError, TypeError):
+                pass
+
+        title = f"@{user_name}: {text[:120]}"
+        summary = (
+            f"{text[:300]}\n\n"
+            f"Likes: {likes} | Comments: {comments} | Reposts: {reposts}"
+        )
+
+        row = {
+            "title": title,
+            "link": url,
+            "published_at": published_at,
+            "source": "Weibo (Apify)",
+            "summary": summary[:500],
+            "language": "zh",
+            "collected_at": now_utc,
+        }
+        cur.execute(_INSERT, row)
+        inserted += cur.rowcount
+
+    conn.commit()
+    logger.info("Weibo: inserted %d new posts", inserted)
+    return inserted
+
+
 # ── Combined collection entry point ──────────────────────────────────────────
 
 def collect_all(conn: sqlite3.Connection) -> dict:
     """
-    Run both Apify collectors.
-    Returns {"twitter": N, "google": N} with insert counts.
+    Run all Apify collectors.
+    Returns dict with insert counts per platform.
     """
     token = _get_token()
-    twitter_count = 0
-    google_count = 0
+    counts: dict[str, int] = {}
 
-    try:
-        twitter_count = collect_twitter(conn, token)
-    except Exception as exc:
-        logger.exception("Apify Twitter collection failed: %s", exc)
+    for name, fn in [
+        ("twitter", collect_twitter),
+        ("google", collect_google_news),
+        ("youtube", collect_youtube),
+        ("reddit", collect_reddit),
+        ("tiktok", collect_tiktok),
+        ("weibo", collect_weibo),
+    ]:
+        try:
+            counts[name] = fn(conn, token)
+        except Exception as exc:
+            logger.exception("Apify %s collection failed: %s", name, exc)
+            counts[name] = 0
 
-    try:
-        google_count = collect_google_news(conn, token)
-    except Exception as exc:
-        logger.exception("Apify Google News collection failed: %s", exc)
-
-    return {"twitter": twitter_count, "google": google_count}
+    return counts
 
 
 # ── Standalone entry point ───────────────────────────────────────────────────
