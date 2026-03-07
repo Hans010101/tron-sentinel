@@ -152,6 +152,32 @@ FEEDS: list[dict] = [
 
 _SUMMARY_MAX_LEN = 500
 
+# ── Relevance filter ──────────────────────────────────────────────────────
+# Only keep articles whose title mentions TRON-related keywords, to avoid
+# ingesting unrelated general crypto news from broad feeds.
+
+_RELEVANCE_KEYWORDS = (
+    "tron", "trx", "justin sun", "孙宇晨", "波场",
+    "sun yuchen", "usdd", "bittorrent", "sunpump", "tron foundation",
+    "tron network",
+)
+
+_NOISE_TITLE_PATTERNS = (
+    "price today", "live price", "price prediction", "to usd",
+    "marketcap and", "price analysis", "price forecast",
+)
+
+
+def _is_relevant(title: str) -> bool:
+    """Return True if the title is relevant to TRON/Justin Sun and not noise."""
+    t = title.lower()
+    # Reject noise regardless of keywords
+    for noise in _NOISE_TITLE_PATTERNS:
+        if noise in t:
+            return False
+    # Must contain at least one relevance keyword
+    return any(kw in t for kw in _RELEVANCE_KEYWORDS)
+
 # ── SQL ────────────────────────────────────────────────────────────────────────
 
 _CREATE_TABLE = """
@@ -271,6 +297,10 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
 
         title = _strip_html(getattr(entry, "title", "") or "")
         if not title:
+            continue
+
+        # Skip articles not related to TRON/Justin Sun
+        if not _is_relevant(title):
             continue
 
         yield {

@@ -42,6 +42,22 @@ VALUES
 
 _API_URL = "https://cryptopanic.com/api/free/v1/posts/?currencies=TRX&kind=news&public=true"
 
+_NOISE_TITLE_PATTERNS = (
+    "price today", "live price", "price prediction", "to usd",
+    "marketcap and", "price analysis", "price forecast",
+)
+
+
+def _is_noise_title(title: str) -> bool:
+    """Return True if the title looks like a price/market page."""
+    t = title.lower().strip()
+    if len(t) < 8:
+        return True
+    for pattern in _NOISE_TITLE_PATTERNS:
+        if pattern in t:
+            return True
+    return False
+
 
 def open_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -80,6 +96,8 @@ def collect_crypto_panic(conn: sqlite3.Connection) -> int:
         title = post.get("title", "").strip()
         url = post.get("url", "").strip()
         if not title or not url:
+            continue
+        if _is_noise_title(title):
             continue
 
         published = post.get("published_at", "")

@@ -43,9 +43,9 @@ VALUES
 """
 
 _BAIDU_KEYWORDS = [
-    "波场 TRON",
     "孙宇晨",
-    "TRX 波场",
+    "波场TRON",
+    "孙宇晨 最新",
 ]
 
 _BAIDU_RSS_TPL = "https://news.baidu.com/ns?word={keyword}&tn=newsrss&sr=0&cl=2&rn=20&ct=0"
