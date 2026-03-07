@@ -61,7 +61,7 @@ class _Handler(BaseHTTPRequestHandler):
                 logger.exception("On-demand pipeline failed: %s", exc)
                 self._send(
                     503,
-                    b"Pipeline error – data not yet available",
+                    b"Pipeline error - data not yet available",
                     "text/plain; charset=utf-8",
                 )
                 return
