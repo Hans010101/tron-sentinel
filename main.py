@@ -9,6 +9,8 @@ Executes in order:
     Step 3  Apify Google Search     collectors/apify_collector.py
     Step 4  CoinGecko market data   collectors/coingecko_collector.py
     Step 5  DeFiLlama TVL data      collectors/defillama_collector.py
+    Step 6  Baidu News RSS          collectors/baidu_collector.py
+    Step 7  CryptoPanic API         collectors/crypto_panic_collector.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -60,7 +62,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 5          # update when adding / removing pipeline steps
+_TOTAL_STEPS = 7          # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -136,6 +138,26 @@ def do_collect_defillama() -> bool:
     conn = open_db(DB_PATH)
     try:
         return collect(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_baidu() -> int:
+    """Baidu News RSS collector → returns count of newly inserted articles."""
+    from collectors.baidu_collector import open_db, collect_baidu  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_baidu(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_crypto_panic() -> int:
+    """CryptoPanic API collector → returns count of newly inserted articles."""
+    from collectors.crypto_panic_collector import open_db, collect_crypto_panic  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_crypto_panic(conn)
     finally:
         conn.close()
 
@@ -423,7 +445,7 @@ def main() -> None:
     step_ok: dict[str, bool] = {}
 
     # ── Step 1: RSS collection ─────────────────────────────────────────────────
-    val, ok = run_step(1, "RSS 新闻采集（CoinDesk / Decrypt / CoinTelegraph / BlockBeats）",
+    val, ok = run_step(1, "RSS 新闻采集（24源：CoinDesk / TheBlock / Blockworks / 金色财经 / PANews 等）",
                        do_collect_rss)
     step_ok["rss"] = ok
     if ok:
@@ -476,6 +498,20 @@ def main() -> None:
                 print(f"     TRON TVL : ${row[0] / 1e9:.2f}B")
         except Exception:
             pass
+
+    # ── Step 6: Baidu News ──────────────────────────────────────────────────
+    val, ok = run_step(6, "百度新闻采集（波场 / 孙宇晨 / TRX）",
+                       do_collect_baidu)
+    step_ok["baidu"] = ok
+    if ok:
+        print(f"     新增文章 : {val} 条")
+
+    # ── Step 7: CryptoPanic ─────────────────────────────────────────────────
+    val, ok = run_step(7, "CryptoPanic TRX 新闻采集",
+                       do_collect_crypto_panic)
+    step_ok["crypto_panic"] = ok
+    if ok:
+        print(f"     新增文章 : {val} 条")
 
     # ── Dashboard JSON ─────────────────────────────────────────────────────────
     print(f"\n{_SEP}")

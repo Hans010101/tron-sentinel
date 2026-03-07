@@ -246,7 +246,19 @@ def collect_twitter(conn: sqlite3.Connection, token: str | None = None) -> int:
 _GOOGLE_ACTOR = "apify~google-search-scraper"
 
 _GOOGLE_INPUT = {
-    "queries": "TRON blockchain news\nTRX crypto news\nJustin Sun TRON",
+    "queries": (
+        "TRON blockchain news\n"
+        "TRX crypto news\n"
+        "Justin Sun TRON\n"
+        "\"Justin Sun\" OR \"TRON Foundation\" crypto\n"
+        "TRX cryptocurrency price\n"
+        "USDD stablecoin TRON\n"
+        "BitTorrent BTT crypto TRON\n"
+        "SunPump TRON meme\n"
+        "波场 孙宇晨\n"
+        "TRON 波场 区块链\n"
+        "孙宇晨 加密货币"
+    ),
     "maxPagesPerQuery": 1,
     "countryCode": "us",
     "searchLanguage": "en",

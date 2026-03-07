@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 DB_PATH = Path(__file__).parent.parent / "data" / "sentinel.db"
 
 FEEDS: list[dict] = [
+    # ── English crypto media ──────────────────────────────────────────────────
     {
         "source":   "CoinDesk",
         "url":      "https://feeds.feedburner.com/CoinDesk",
@@ -45,6 +46,37 @@ FEEDS: list[dict] = [
         "language": "en",
     },
     {
+        "source":   "TheBlock",
+        "url":      "https://www.theblock.co/rss.xml",
+        "language": "en",
+    },
+    {
+        "source":   "Blockworks",
+        "url":      "https://blockworks.co/feed",
+        "language": "en",
+    },
+    {
+        "source":   "BitcoinMagazine",
+        "url":      "https://bitcoinmagazine.com/.rss/full/",
+        "language": "en",
+    },
+    {
+        "source":   "DLNews",
+        "url":      "https://www.dlnews.com/arc/outboundfeeds/rss/",
+        "language": "en",
+    },
+    {
+        "source":   "Protos",
+        "url":      "https://protos.com/feed/",
+        "language": "en",
+    },
+    {
+        "source":   "TheDefiant",
+        "url":      "https://thedefiant.io/feed",
+        "language": "en",
+    },
+    # ── Google News (English) ─────────────────────────────────────────────────
+    {
         "source":   "GoogleNews_TRON",
         "url":      "https://news.google.com/rss/search?q=TRON+TRX+cryptocurrency&hl=en&gl=US&ceid=US:en",
         "language": "en",
@@ -54,10 +86,67 @@ FEEDS: list[dict] = [
         "url":      "https://news.google.com/rss/search?q=Justin+Sun+TRON&hl=en&gl=US&ceid=US:en",
         "language": "en",
     },
+    # ── Chinese crypto media ──────────────────────────────────────────────────
     {
         "source":   "BlockBeats",
         "url":      "https://www.theblockbeats.info/rss",
         "language": "zh",
+    },
+    {
+        "source":   "JinSeCaiJing",
+        "url":      "https://www.jinse.cn/rss",
+        "language": "zh",
+    },
+    {
+        "source":   "PANews",
+        "url":      "https://www.panewslab.com/rss/zh/index.xml",
+        "language": "zh",
+    },
+    {
+        "source":   "ShenChaoTechFlow",
+        "url":      "https://www.techflowpost.com/rss",
+        "language": "zh",
+    },
+    {
+        "source":   "Bitpush",
+        "url":      "https://www.bitpush.news/feed",
+        "language": "zh",
+    },
+    {
+        "source":   "8BTC",
+        "url":      "https://www.8btc.com/feed",
+        "language": "zh",
+    },
+    {
+        "source":   "BlockTempo",
+        "url":      "https://www.blocktempo.com/feed/",
+        "language": "zh",
+    },
+    # ── Mainstream media ──────────────────────────────────────────────────────
+    {
+        "source":   "Reuters_Tech",
+        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:reuters.com&hl=en&gl=US&ceid=US:en",
+        "language": "en",
+    },
+    {
+        "source":   "BBC_Crypto",
+        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:bbc.com&hl=en&gl=US&ceid=US:en",
+        "language": "en",
+    },
+    {
+        "source":   "Guardian_Crypto",
+        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:theguardian.com&hl=en&gl=US&ceid=US:en",
+        "language": "en",
+    },
+    {
+        "source":   "SCMP_Crypto",
+        "url":      "https://news.google.com/rss/search?q=TRON+Justin+Sun+site:scmp.com&hl=en&gl=US&ceid=US:en",
+        "language": "en",
+    },
+    {
+        "source":   "Forbes_Crypto",
+        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:forbes.com&hl=en&gl=US&ceid=US:en",
+        "language": "en",
     },
 ]
 
