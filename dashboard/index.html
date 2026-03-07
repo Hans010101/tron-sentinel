@@ -502,13 +502,18 @@ async function loadData() {
   try {
     const r = await _fetchTimeout('/data.json', 120000);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    DATA = await r.json();
-    _dataLoaded = true;
-    const src = document.getElementById('data-source');
-    const ts  = document.getElementById('data-timestamp');
-    if (src) src.textContent = 'Twitter/X, Google News, RSS, CoinGecko, DeFiLlama';
-    if (ts && DATA.generated_at) ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
-    return;
+    const json = await r.json();
+    /* Accept real data as long as overview exists with today_total > 0 */
+    if (json && json.overview && json.overview.today_total > 0) {
+      DATA = json;
+      _dataLoaded = true;
+      const src = document.getElementById('data-source');
+      const ts  = document.getElementById('data-timestamp');
+      if (src) src.textContent = 'Twitter/X, YouTube, Reddit, TikTok, Weibo, Bilibili, Google News, RSS, CoinGecko, DeFiLlama';
+      if (ts && DATA.generated_at) ts.textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
+      return;
+    }
+    console.warn('[Sentinel] data.json has no valid overview, retrying...');
   } catch (e) {
     console.warn('[Sentinel] fetch failed:', e.message);
   }
@@ -521,11 +526,16 @@ async function retryLoad() {
   try {
     const r = await _fetchTimeout('/data.json', 120000);
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    DATA = await r.json(); _dataLoaded = true;
-    document.getElementById('data-source').textContent = 'Twitter/X, Google News, RSS, CoinGecko, DeFiLlama';
-    if (DATA.generated_at) document.getElementById('data-timestamp').textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
-    renderAll_inner();
-  } catch (e) { setTimeout(retryLoad, 15000); }
+    const json = await r.json();
+    if (json && json.overview && json.overview.today_total > 0) {
+      DATA = json; _dataLoaded = true;
+      document.getElementById('data-source').textContent = 'Twitter/X, YouTube, Reddit, TikTok, Weibo, Bilibili, Google News, RSS, CoinGecko, DeFiLlama';
+      if (DATA.generated_at) document.getElementById('data-timestamp').textContent = new Date(DATA.generated_at).toLocaleString('zh-CN');
+      renderAll_inner();
+      return;
+    }
+  } catch (e) { /* retry */ }
+  setTimeout(retryLoad, 15000);
 }
 
 /* ── CLOCK ──────────────────────────────────────────────── */
@@ -611,15 +621,26 @@ function _classifySource(src) {
   if (!src) return 'rss';
   const s = src.toLowerCase();
   if (s.includes('twitter') || s.includes('x.com') || s.includes('tweet')) return 'twitter';
-  if (s.includes('google'))  return 'google';
+  if (s.includes('google'))   return 'google';
+  if (s.includes('youtube'))  return 'youtube';
+  if (s.includes('reddit'))   return 'reddit';
+  if (s.includes('tiktok'))   return 'tiktok';
+  if (s.includes('weibo'))    return 'weibo';
+  if (s.includes('bilibili')) return 'bilibili';
+  if (s.includes('baidu'))    return 'baidu';
+  if (s.includes('cryptopanic')) return 'cryptopanic';
   return 'rss';
 }
 
 function _sourceTag(src) {
   const type = _classifySource(src);
-  const labels = { twitter: 'Twitter/X', google: 'Google News', rss: 'RSS' };
-  const cls    = { twitter: 'src-twitter', google: 'src-google', rss: 'src-rss' };
-  return `<span class="news-source ${cls[type]}">${labels[type]}</span>`;
+  const labels = { twitter:'Twitter/X', google:'Google News', youtube:'YouTube',
+                   reddit:'Reddit', tiktok:'TikTok', weibo:'Weibo',
+                   bilibili:'Bilibili', baidu:'Baidu', cryptopanic:'CryptoPanic', rss:'RSS' };
+  const cls    = { twitter:'src-twitter', google:'src-google', youtube:'src-google',
+                   reddit:'src-rss', tiktok:'src-twitter', weibo:'src-google',
+                   bilibili:'src-twitter', baidu:'src-google', cryptopanic:'src-rss', rss:'src-rss' };
+  return `<span class="news-source ${cls[type] || 'src-rss'}">${labels[type] || src}</span>`;
 }
 
 function _esc(s) {

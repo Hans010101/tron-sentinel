@@ -16,6 +16,7 @@ Executes in order:
     Step 10  DeFiLlama TVL data      collectors/defillama_collector.py
     Step 11  Baidu News RSS          collectors/baidu_collector.py
     Step 12  CryptoPanic API         collectors/crypto_panic_collector.py
+    Step 13  Sentiment Analysis      analyzers/sentiment_analyzer.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -67,7 +68,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 12         # update when adding / removing pipeline steps
+_TOTAL_STEPS = 13         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -213,6 +214,16 @@ def do_collect_crypto_panic() -> int:
     conn = open_db(DB_PATH)
     try:
         return collect_crypto_panic(conn)
+    finally:
+        conn.close()
+
+
+def do_analyze_sentiment() -> int:
+    """Keyword-based sentiment analyzer → returns count of articles analyzed."""
+    from analyzers.sentiment_analyzer import open_db, analyze_sentiment  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return analyze_sentiment(conn)
     finally:
         conn.close()
 
@@ -602,6 +613,13 @@ def main() -> None:
     step_ok["crypto_panic"] = ok
     if ok:
         print(f"     新增文章 : {val} 条")
+
+    # ── Step 13: Sentiment Analysis ───────────────────────────────────────
+    val, ok = run_step(13, "情绪分析（关键词分类）",
+                       do_analyze_sentiment)
+    step_ok["sentiment"] = ok
+    if ok:
+        print(f"     已分析   : {val} 条")
 
     # ── Dashboard JSON ─────────────────────────────────────────────────────────
     print(f"\n{_SEP}")
