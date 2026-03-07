@@ -5,12 +5,10 @@ TRON Sentinel – full data pipeline orchestrator.
 
 Executes in order:
     Step 1  RSS collection          collectors/rss_collector.py
-    Step 2  Telegram channel scrape collectors/telegram_collector.py
-    Step 3  Google News scrape      collectors/google_news_collector.py
+    Step 2  Apify Twitter/X         collectors/apify_collector.py
+    Step 3  Apify Google Search     collectors/apify_collector.py
     Step 4  CoinGecko market data   collectors/coingecko_collector.py
     Step 5  DeFiLlama TVL data      collectors/defillama_collector.py
-    Step 6  Sentiment analysis      analyzers/sentiment_analyzer.py
-    Step 7  Telegram alerting       alerting/telegram_alerter.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -50,7 +48,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 7          # update when adding / removing pipeline steps
+_TOTAL_STEPS = 5          # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -90,22 +88,22 @@ def do_collect_rss() -> int:
         conn.close()
 
 
-def do_collect_telegram() -> int:
-    """Telegram channel collector → returns count of newly inserted messages."""
-    from collectors.telegram_collector import open_db, collect_all  # noqa: PLC0415
+def do_collect_apify_twitter() -> int:
+    """Apify Twitter/X collector → returns count of newly inserted tweets."""
+    from collectors.apify_collector import open_db, collect_twitter  # noqa: PLC0415
     conn = open_db(DB_PATH)
     try:
-        return collect_all(conn)
+        return collect_twitter(conn)
     finally:
         conn.close()
 
 
-def do_collect_google_news() -> int:
-    """Google News RSS collector → returns count of newly inserted articles."""
-    from collectors.google_news_collector import open_db, collect_all  # noqa: PLC0415
+def do_collect_apify_google() -> int:
+    """Apify Google Search News collector → returns count of newly inserted articles."""
+    from collectors.apify_collector import open_db, collect_google_news  # noqa: PLC0415
     conn = open_db(DB_PATH)
     try:
-        return collect_all(conn)
+        return collect_google_news(conn)
     finally:
         conn.close()
 
@@ -126,29 +124,6 @@ def do_collect_defillama() -> bool:
     conn = open_db(DB_PATH)
     try:
         return collect(conn)
-    finally:
-        conn.close()
-
-
-def do_analyze() -> int:
-    """VADER sentiment analysis → returns count of newly scored rows."""
-    from analyzers.sentiment_analyzer import open_db, analyze_pending  # noqa: PLC0415
-    conn = open_db(DB_PATH)
-    try:
-        return analyze_pending(conn)
-    finally:
-        conn.close()
-
-
-def do_alert() -> int:
-    """Dispatch Telegram alerts → returns count of messages sent."""
-    from alerting.telegram_alerter import (  # noqa: PLC0415
-        TelegramAlerter, fetch_negative_articles, open_db as alert_open_db,
-    )
-    conn = alert_open_db(DB_PATH)
-    try:
-        articles = fetch_negative_articles(conn, limit=5)
-        return TelegramAlerter().send_alerts(articles, delay=0.5)
     finally:
         conn.close()
 
@@ -231,10 +206,6 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         market           TRX price, change, market_cap, volume (CoinGecko)
                          + tvl (DeFiLlama)
     """
-    from alerting.telegram_alerter import (  # noqa: PLC0415
-        alert_level, fetch_negative_articles,
-    )
-
     now       = datetime.now(timezone.utc)
     today_pfx = now.strftime("%Y-%m-%d")
     cutoff_24 = (now - timedelta(hours=24)).isoformat()
@@ -295,20 +266,32 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         trend.append({"hour": slot.strftime("%H:00"), "positive": p,
                       "negative": n, "neutral": u})
 
-    # ── Alerts – top 5 most recent negative articles ───────────────────────────
-    neg_articles  = fetch_negative_articles(conn, limit=5)
+    # ── Alerts – top 5 most recent articles (by recency) ──────────────────────
+    alert_rows = conn.execute(
+        "SELECT title, source, link, published_at, sentiment_score "
+        "FROM raw_articles "
+        "ORDER BY collected_at DESC LIMIT 5"
+    ).fetchall()
     alerts_out: list[dict] = []
-    for a in neg_articles:
-        icon, level = alert_level(a["sentiment_score"])
+    for title, source, link, pub_at, score in alert_rows:
+        score = score or 0.0
+        if score < -0.5:
+            icon, level = "!!!", "CRITICAL"
+        elif score < -0.2:
+            icon, level = "!!", "HIGH"
+        elif score < 0:
+            icon, level = "!", "MEDIUM"
+        else:
+            icon, level = "i", "LOW"
         alerts_out.append({
             "icon":        icon,
             "level":       level,
             "level_class": _LEVEL_CLASS.get(level, "tag-low"),
-            "title":       a["title"],
-            "source":      a["source"],
-            "score":       round(a["sentiment_score"], 4),
-            "link":        a["link"],
-            "time_ago":    _time_ago(a.get("published_at"), now),
+            "title":       title,
+            "source":      source,
+            "score":       round(score, 4),
+            "link":        link,
+            "time_ago":    _time_ago(pub_at, now),
         })
 
     # ── Language volumes ───────────────────────────────────────────────────────
@@ -421,17 +404,17 @@ def main() -> None:
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 2: Telegram channel scrape ───────────────────────────────────────
-    val, ok = run_step(2, "Telegram 频道采集（@tronfoundation / @justinsuntron / …）",
-                       do_collect_telegram)
-    step_ok["telegram_collect"] = ok
+    # ── Step 2: Apify Twitter/X ────────────────────────────────────────────────
+    val, ok = run_step(2, "Apify Twitter/X 采集（TRON / TRX 相关推文）",
+                       do_collect_apify_twitter)
+    step_ok["apify_twitter"] = ok
     if ok:
-        print(f"     新增消息 : {val} 条")
+        print(f"     新增推文 : {val} 条")
 
-    # ── Step 3: Google News ────────────────────────────────────────────────────
-    val, ok = run_step(3, "Google News 采集（TRON / TRX / Justin Sun）",
-                       do_collect_google_news)
-    step_ok["google_news"] = ok
+    # ── Step 3: Apify Google Search News ───────────────────────────────────────
+    val, ok = run_step(3, "Apify Google 新闻采集（TRON / TRX / Justin Sun）",
+                       do_collect_apify_google)
+    step_ok["apify_google"] = ok
     if ok:
         print(f"     新增文章 : {val} 条")
 
@@ -439,7 +422,6 @@ def main() -> None:
     val, ok = run_step(4, "CoinGecko TRX 市场数据", do_collect_coingecko)
     step_ok["coingecko"] = ok
     if ok and val:
-        # Print a quick price summary from the freshly written row.
         try:
             conn_tmp = sqlite3.connect(DB_PATH)
             row = conn_tmp.execute(
@@ -469,26 +451,6 @@ def main() -> None:
                 print(f"     TRON TVL : ${row[0] / 1e9:.2f}B")
         except Exception:
             pass
-
-    # ── Step 6: Sentiment analysis ─────────────────────────────────────────────
-    if DB_PATH.exists():
-        val, ok = run_step(6, "VADER 情绪分析", do_analyze)
-        step_ok["analyze"] = ok
-        if ok:
-            print(f"     本次分析 : {val} 条")
-    else:
-        print(f"\n  ⚠  数据库未找到，跳过第 6 步（{DB_PATH}）")
-        step_ok["analyze"] = False
-
-    # ── Step 7: Telegram alerting ──────────────────────────────────────────────
-    if DB_PATH.exists():
-        val, ok = run_step(7, "Telegram 预警发送", do_alert)
-        step_ok["alert"] = ok
-        if ok:
-            print(f"     已发送   : {val} 条")
-    else:
-        print(f"\n  ⚠  数据库未找到，跳过第 7 步（{DB_PATH}）")
-        step_ok["alert"] = False
 
     # ── Dashboard JSON ─────────────────────────────────────────────────────────
     print(f"\n{_SEP}")
