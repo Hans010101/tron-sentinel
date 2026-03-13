@@ -1,13 +1,13 @@
 """
 analyzers/llm_analyzer.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-Deepseek-powered LLM analyzer for TRON Sentinel articles.
+LLM analyzer for TRON Sentinel articles (Alibaba DashScope).
 
-Calls the Deepseek chat completion API to classify, summarise, and
-risk-assess articles collected in the raw_articles table.
+Calls the DashScope-compatible chat completion API to classify, summarise,
+and risk-assess articles collected in the raw_articles table.
 
 Environment variable:
-    DEEPSEEK_API_KEY  – Required.  Obtain from https://platform.deepseek.com
+    DASHSCOPE_API_KEY  – Required.  Obtain from https://dashscope.console.aliyun.com
 
 Usage:
     python -m analyzers.llm_analyzer          # analyse pending articles
@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = Path(__file__).parent.parent / "data" / "sentinel.db"
 
-_API_URL = "https://api.deepseek.com/chat/completions"
-_MODEL = "deepseek-chat"
+_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+_MODEL = "deepseek-v3"
 
 _MAX_BATCH = 50       # max articles per run
 _CALL_DELAY = 0.5     # seconds between API calls
@@ -141,13 +141,13 @@ def _update_article(conn: sqlite3.Connection, article_id: int,
     conn.commit()
 
 
-# ── Deepseek API call ────────────────────────────────────────────────────────
+# ── DashScope API call ────────────────────────────────────────────────────────
 
 
 def _call_deepseek(api_key: str, title: str, summary: str,
                    source: str, language: str) -> Optional[dict]:
     """
-    Send a single article to Deepseek for analysis and return parsed JSON.
+    Send a single article to DashScope for analysis and return parsed JSON.
 
     Returns None on any failure (network, parse, API error).
     """
@@ -211,13 +211,13 @@ def _call_deepseek(api_key: str, title: str, summary: str,
         return result
 
     except urllib.error.HTTPError as exc:
-        logger.error("Deepseek HTTP %d: %s", exc.code, exc.reason)
+        logger.error("DashScope HTTP %d: %s", exc.code, exc.reason)
     except urllib.error.URLError as exc:
-        logger.error("Deepseek network error: %s", exc.reason)
+        logger.error("DashScope network error: %s", exc.reason)
     except (json.JSONDecodeError, KeyError, ValueError) as exc:
-        logger.error("Deepseek response parse error: %s", exc)
+        logger.error("DashScope response parse error: %s", exc)
     except Exception as exc:
-        logger.error("Deepseek unexpected error: %s", exc)
+        logger.error("DashScope unexpected error: %s", exc)
 
     return None
 
@@ -227,14 +227,14 @@ def _call_deepseek(api_key: str, title: str, summary: str,
 
 def analyze_articles(db_path: Path = DB_PATH) -> int:
     """
-    Analyse unprocessed articles from the last 24 hours using Deepseek.
+    Analyse unprocessed articles from the last 24 hours using DashScope.
 
     Returns the number of articles successfully analysed.
-    Skips silently if DEEPSEEK_API_KEY is not set.
+    Skips silently if DASHSCOPE_API_KEY is not set.
     """
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
     if not api_key:
-        logger.info("DEEPSEEK_API_KEY not set – skipping LLM analysis.")
+        logger.info("DASHSCOPE_API_KEY not set – skipping LLM analysis.")
         return 0
 
     conn = open_db(db_path)

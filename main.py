@@ -230,10 +230,10 @@ def do_analyze_sentiment() -> int:
 
 
 def do_llm_analyze() -> int:
-    """Deepseek LLM analyzer → returns count of articles analysed."""
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    """DashScope LLM analyzer → returns count of articles analysed."""
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
     if not api_key:
-        logger.info("DEEPSEEK_API_KEY not set – skipping LLM analysis.")
+        logger.info("DASHSCOPE_API_KEY not set – skipping LLM analysis.")
         return 0
     from analyzers.llm_analyzer import analyze_articles  # noqa: PLC0415
     return analyze_articles(DB_PATH)
