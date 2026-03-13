@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TRON Sentinel - 全网舆情监控系统</title>
+  <title>TRON Sentinel V2 - 全网舆情监控系统</title>
   <style>
     :root {
       --primary:     #C23631;
@@ -30,6 +30,11 @@
       --src-twitter: #1d9bf0;
       --src-google:  #ea4335;
       --src-rss:     #16a34a;
+      /* Risk colors */
+      --risk-critical: #DC2626;
+      --risk-high:     #EA580C;
+      --risk-medium:   #CA8A04;
+      --risk-low:      #16A34A;
     }
 
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -185,6 +190,64 @@
     .stat-value.c-blue    { color: var(--blue); }
     .stat-hint { font-size: 11px; color: var(--text-3); }
 
+    /* RISK ALERT PANEL */
+    .risk-panel {
+      background: var(--card);
+      border: 2px solid var(--red);
+      border-radius: 12px;
+      padding: 20px 22px;
+    }
+    .risk-panel .card-head { margin-bottom: 8px; }
+    .risk-item {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 12px 14px; margin-bottom: 6px;
+      border-radius: 10px; text-decoration: none; color: inherit;
+      transition: background 0.15s;
+      border: 1px solid var(--border);
+    }
+    .risk-item:hover { background: rgba(0,0,0,0.02); }
+    .risk-item.risk-critical { background: var(--red-dim); border-color: rgba(220,38,38,0.3); }
+    .risk-bar {
+      width: 56px; flex-shrink: 0; text-align: center;
+    }
+    .risk-score-num {
+      font-size: 20px; font-weight: 800; line-height: 1.2;
+    }
+    .risk-score-label {
+      font-size: 9px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; margin-top: 2px;
+    }
+    .risk-body { flex: 1; min-width: 0; }
+    .risk-title {
+      font-size: 13px; font-weight: 600; color: var(--text-1);
+      margin-bottom: 4px; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .risk-summary {
+      font-size: 12px; color: var(--text-2); line-height: 1.5;
+      margin-bottom: 6px;
+      display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .risk-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--text-3); flex-wrap: wrap;
+    }
+
+    /* SECTOR/CATEGORY TAGS */
+    .sector-tag {
+      font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: 4px;
+      display: inline-block;
+    }
+    .sector-star    { background: rgba(194,54,49,0.1); color: #C23631; }
+    .sector-kol     { background: rgba(99,102,241,0.1); color: #6366f1; }
+    .sector-news    { background: rgba(37,99,235,0.1);  color: #2563eb; }
+    .sector-discuss { background: rgba(22,163,74,0.1);  color: #16a34a; }
+    .sector-tech    { background: rgba(234,88,12,0.1);  color: #ea580c; }
+    .sector-reg     { background: rgba(220,38,38,0.1);  color: #dc2626; }
+
     /* ALERT LIST */
     .alert-list { display: flex; flex-direction: column; gap: 8px; }
     .alert-item {
@@ -226,20 +289,76 @@
     .tag-medium   { background: var(--yellow-dim); color: var(--yellow); }
     .tag-low      { background: rgba(156,163,175,0.15); color: var(--text-2); }
 
+    /* AI STATS GRID */
+    .ai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+    }
+    .ai-stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .ai-stat-title {
+      font-size: 12px; font-weight: 600; color: var(--text-2);
+      margin-bottom: 12px;
+    }
+    .ai-stat-big {
+      font-size: 24px; font-weight: 700; color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .ai-stat-sub { font-size: 11px; color: var(--text-3); }
+    .dist-bar {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 6px;
+    }
+    .dist-label {
+      font-size: 11px; color: var(--text-2);
+      min-width: 70px; text-align: right;
+    }
+    .dist-track {
+      flex: 1; height: 14px; background: var(--bg);
+      border-radius: 7px; overflow: hidden;
+    }
+    .dist-fill {
+      height: 100%; border-radius: 7px;
+      transition: width 0.4s ease;
+    }
+    .dist-count {
+      font-size: 10px; color: var(--text-3);
+      min-width: 30px;
+    }
+
     /* NEWS LIST */
+    .news-controls {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .news-controls select {
+      font-size: 12px; padding: 4px 10px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--bg);
+      color: var(--text-1); cursor: pointer;
+    }
     .news-list { display: flex; flex-direction: column; gap: 0; }
     .news-item {
-      display: flex; align-items: center; gap: 14px;
-      padding: 12px 4px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 4px;
       border-bottom: 1px solid var(--border);
       text-decoration: none; color: inherit;
       transition: background 0.15s;
     }
     .news-item:last-child { border-bottom: none; }
     .news-item:hover { background: rgba(0,0,0,0.015); }
+    .news-content { flex: 1; min-width: 0; }
     .news-title {
-      flex: 1; min-width: 0;
       font-size: 13px; color: var(--text-1); line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .news-llm-summary {
+      font-size: 11px; color: var(--text-2); margin-top: 2px;
       display: -webkit-box; -webkit-line-clamp: 1;
       -webkit-box-orient: vertical; overflow: hidden;
     }
@@ -251,6 +370,11 @@
     .src-twitter { background: rgba(29,155,240,0.10); color: var(--src-twitter); }
     .src-google  { background: rgba(234,67,53,0.10);  color: var(--src-google); }
     .src-rss     { background: rgba(22,163,74,0.10);   color: var(--src-rss); }
+    .news-risk-badge {
+      font-size: 11px; font-weight: 700;
+      min-width: 32px; text-align: center; flex-shrink: 0;
+      padding: 2px 6px; border-radius: 6px;
+    }
     .news-score {
       font-size: 11px; font-weight: 600;
       min-width: 42px; text-align: center; flex-shrink: 0;
@@ -270,6 +394,28 @@
     }
     .legend-swatch { width: 22px; height: 3px; border-radius: 2px; }
     canvas { display: block; }
+
+    /* PLATFORM CHART */
+    .platform-bar-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 8px;
+    }
+    .platform-name {
+      font-size: 12px; color: var(--text-2);
+      min-width: 70px; text-align: right; font-weight: 500;
+    }
+    .platform-track {
+      flex: 1; height: 22px; background: var(--bg);
+      border-radius: 6px; overflow: hidden;
+      display: flex;
+    }
+    .platform-seg {
+      height: 100%; transition: width 0.4s ease;
+    }
+    .platform-count {
+      font-size: 11px; color: var(--text-2);
+      min-width: 36px; font-weight: 600;
+    }
 
     /* MARKET ROW */
     .market-grid {
@@ -309,6 +455,7 @@
     @media (max-width: 1200px) {
       .overview-grid { grid-template-columns: repeat(3, 1fr); }
       .market-grid   { grid-template-columns: repeat(2, 1fr); }
+      .ai-grid       { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 768px) {
       nav { padding: 0 16px; }
@@ -316,8 +463,9 @@
       .nav-tag { display: none; }
       .overview-grid { grid-template-columns: 1fr 1fr; }
       .market-grid   { grid-template-columns: 1fr 1fr; }
+      .ai-grid       { grid-template-columns: 1fr; }
       .stat-value { font-size: 22px; }
-      .news-score, .news-time { display: none; }
+      .news-score, .news-time, .news-risk-badge { display: none; }
     }
     @media (max-width: 480px) {
       .overview-grid { grid-template-columns: 1fr; }
@@ -331,6 +479,7 @@
   <div class="nav-brand">
     <div class="brand-icon">T</div>
     TRON <span class="brand-accent">Sentinel</span>
+    <span style="font-size:11px;color:var(--text-3);font-weight:400">V2</span>
   </div>
   <div class="nav-tag">TRON &amp; Justin Sun 全网舆情监控系统</div>
   <div class="nav-right">
@@ -343,6 +492,17 @@
 </nav>
 
 <main>
+
+  <!-- RISK ALERT PANEL -->
+  <div class="section-label">风险预警</div>
+  <div class="risk-panel" id="riskPanel">
+    <div class="card-head">
+      <div class="card-title" style="color:var(--red)">实时风险预警</div>
+      <span class="badge" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,0.3)" id="badge-risk">-- 条</span>
+    </div>
+    <div class="card-sub">最近24小时风险分数 ≥60 的文章（越高越危险）</div>
+    <div id="riskList"></div>
+  </div>
 
   <!-- OVERVIEW -->
   <div class="section-label">舆情概览</div>
@@ -374,18 +534,41 @@
     </div>
   </div>
 
-  <!-- ALERTS -->
-  <div class="section-label">实时预警</div>
-  <div class="card">
-    <div class="card-head">
-      <div class="card-title">最新预警</div>
-      <span class="badge badge-live" id="badge-alerts">-- 条</span>
+  <!-- AI ANALYSIS STATS -->
+  <div class="section-label">AI 分析概览</div>
+  <div class="ai-grid">
+    <div class="ai-stat-card">
+      <div class="ai-stat-title">LLM 分析覆盖</div>
+      <div class="ai-stat-big" id="ai-coverage">--</div>
+      <div class="ai-stat-sub" id="ai-coverage-sub">已分析 / 总文章</div>
     </div>
-    <div class="card-sub">最近触发的舆情预警，按严重程度排序（点击跳转原文）</div>
-    <div class="alert-list" id="alertList"></div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-title">板块分布</div>
+      <div id="sectorDist"></div>
+    </div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-title">内容分类</div>
+      <div id="categoryDist"></div>
+    </div>
   </div>
 
-  <!-- NEWS -->
+  <!-- PLATFORM MAP -->
+  <div class="section-label">舆情地图</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">按平台统计</div>
+      <span class="badge badge-live">全量</span>
+    </div>
+    <div class="card-sub">各平台文章数量及情感分布</div>
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--yellow)"></div>中性</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>负面</div>
+    </div>
+    <div id="platformChart"></div>
+  </div>
+
+  <!-- NEWS LIST -->
   <div class="section-label">最新动态</div>
   <div class="card">
     <div class="card-head">
@@ -393,6 +576,16 @@
       <span class="badge badge-live">实时</span>
     </div>
     <div class="card-sub">最新采集的 TRON / Justin Sun 相关内容（点击跳转原文）</div>
+    <div class="news-controls">
+      <select id="filterSector" title="按板块筛选">
+        <option value="">全部板块</option>
+      </select>
+      <select id="sortRisk" title="按风险排序">
+        <option value="">默认排序</option>
+        <option value="desc">风险 高→低</option>
+        <option value="asc">风险 低→高</option>
+      </select>
+    </div>
     <div class="news-list" id="newsList"></div>
   </div>
 
@@ -405,15 +598,9 @@
     </div>
     <div class="card-sub">过去 24 小时正面 / 负面 / 中性情绪占比变化</div>
     <div class="chart-legend">
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:var(--green)"></div>正面
-      </div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:var(--red)"></div>负面
-      </div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:var(--indigo)"></div>中性
-      </div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>负面</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--indigo)"></div>中性</div>
     </div>
     <canvas id="sentimentChart" style="width:100%;height:240px"></canvas>
   </div>
@@ -446,7 +633,7 @@
 </main>
 
 <footer>
-  TRON Sentinel &copy; 2025 &nbsp;&middot;&nbsp;
+  TRON Sentinel V2 &copy; 2025 &nbsp;&middot;&nbsp;
   数据来源：<span id="data-source">加载中...</span> &nbsp;&middot;&nbsp;
   最后更新：<span id="data-timestamp">--</span> &nbsp;&middot;&nbsp;
   <a href="https://github.com/Hans010101/TRON-Sentinel" target="_blank" rel="noopener">GitHub</a>
@@ -472,18 +659,14 @@ function _mockTrend() {
 }
 
 const _MOCK = {
-  overview: { today_total: 346, positive_pct: 42, negative_pct: 18, neutral_pct: 40, active_alerts: 3 },
+  overview: { today_total: 0, positive_pct: 0, negative_pct: 0, neutral_pct: 0, active_alerts: 0 },
   sentiment_trend: _mockTrend(),
-  alerts: [
-    { icon:'!!!', level:'CRITICAL', level_class:'tag-critical',
-      title:'TRX price dropped 9.2%, Twitter negative sentiment surged 42%',
-      source:'Twitter', score:-0.82, link:'#', time_ago:'5 min ago' },
-    { icon:'!!', level:'HIGH', level_class:'tag-high',
-      title:'Justin Sun negative news volume surged 340% in the past hour',
-      source:'Google (CoinDesk)', score:-0.61, link:'#', time_ago:'23 min ago' },
-  ],
+  alerts: [],
   language_volumes: [],
-  market: { price_usd: 0.2840, change_24h: -0.53, market_cap: 26900000000, tvl: 4050000000 },
+  market: {},
+  risk_alerts: [],
+  llm_stats: { analyzed: 0, total: 0, sector_dist: [], category_dist: [] },
+  platform_stats: [],
 };
 
 /* ── DATA STATE ─────────────────────────────────────────── */
@@ -503,7 +686,6 @@ async function loadData() {
     const r = await _fetchTimeout('/data.json', 120000);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const json = await r.json();
-    /* Accept real data as long as overview exists with today_total > 0 */
     if (json && json.overview && json.overview.today_total > 0) {
       DATA = json;
       _dataLoaded = true;
@@ -547,75 +729,37 @@ function updateClock() {
 }
 updateClock(); setInterval(updateClock, 1000);
 
-/* ── OVERVIEW ───────────────────────────────────────────── */
+/* ── HELPERS ────────────────────────────────────────────── */
 
-function updateOverview() {
-  const o = DATA.overview || {};
-  const $ = id => document.getElementById(id);
-  if ($('stat-total'))  $('stat-total').textContent  = Number(o.today_total ?? 0).toLocaleString('zh-CN');
-  if ($('stat-pos'))    $('stat-pos').textContent    = (o.positive_pct ?? 0).toFixed(1) + '%';
-  if ($('stat-neg'))    $('stat-neg').textContent    = (o.negative_pct ?? 0).toFixed(1) + '%';
-  if ($('stat-neu'))    $('stat-neu').textContent    = (o.neutral_pct ?? 0).toFixed(1) + '%';
-  if ($('stat-alerts')) $('stat-alerts').textContent = o.active_alerts ?? 0;
-  if ($('badge-alerts')) $('badge-alerts').textContent = (o.active_alerts ?? 0) + ' 条';
+function _esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
-/* ── ALERTS ─────────────────────────────────────────────── */
-
-function renderAlerts() {
-  const el = document.getElementById('alertList');
-  if (!el) return;
-  const alerts = DATA.alerts || [];
-  if (!alerts.length) {
-    el.innerHTML = '<p style="color:var(--text-3);font-size:13px;padding:12px 0">暂无预警</p>';
-    return;
-  }
-  el.innerHTML = alerts.map(a => {
-    const dotCls = a.level === 'CRITICAL' ? 'dot-critical' :
-                   a.level === 'HIGH' ? 'dot-high' :
-                   a.level === 'MEDIUM' ? 'dot-medium' : 'dot-low';
-    const srcTag = _sourceTag(a.source);
-    return `<a class="alert-item" href="${_esc(a.link || '#')}" target="_blank" rel="noopener">
-      <div class="alert-dot ${dotCls}"></div>
-      <div class="alert-body">
-        <div class="alert-title">${_esc(a.title)}</div>
-        <div class="alert-meta">
-          <span class="alert-tag ${a.level_class || 'tag-low'}">${_esc(a.level)}</span>
-          ${srcTag}
-          <span style="color:var(--text-3)">&middot;</span>
-          <span>score ${(a.score ?? 0).toFixed(2)}</span>
-          <span style="color:var(--text-3)">&middot;</span>
-          <span>${_esc(a.time_ago)}</span>
-        </div>
-      </div>
-    </a>`;
-  }).join('');
+function _riskColor(score) {
+  if (score >= 80) return 'var(--risk-critical)';
+  if (score >= 60) return 'var(--risk-high)';
+  if (score >= 40) return 'var(--risk-medium)';
+  return 'var(--risk-low)';
 }
 
-/* ── NEWS LIST ──────────────────────────────────────────── */
-
-function renderNews() {
-  const el = document.getElementById('newsList');
-  if (!el) return;
-  const items = DATA.alerts || [];
-  if (!items.length) {
-    el.innerHTML = '<p style="color:var(--text-3);font-size:13px;padding:12px 0">暂无新闻</p>';
-    return;
-  }
-  el.innerHTML = items.map(a => {
-    const srcTag = _sourceTag(a.source);
-    const scoreColor = (a.score ?? 0) < -0.2 ? 'var(--red)' :
-                       (a.score ?? 0) > 0.2 ? 'var(--green)' : 'var(--text-2)';
-    return `<a class="news-item" href="${_esc(a.link || '#')}" target="_blank" rel="noopener">
-      ${srcTag}
-      <div class="news-title">${_esc(a.title)}</div>
-      <div class="news-score" style="color:${scoreColor}">${(a.score ?? 0).toFixed(2)}</div>
-      <div class="news-time">${_esc(a.time_ago)}</div>
-    </a>`;
-  }).join('');
+function _riskBg(score) {
+  if (score >= 80) return 'rgba(220,38,38,0.12)';
+  if (score >= 60) return 'rgba(234,88,12,0.12)';
+  if (score >= 40) return 'rgba(202,138,4,0.12)';
+  return 'rgba(22,163,74,0.12)';
 }
 
-/* ── SOURCE TAG HELPER ──────────────────────────────────── */
+function _sectorClass(sector) {
+  const map = {
+    '明星公司动态':'sector-star', '大佬动态':'sector-kol',
+    '行业新闻':'sector-news', '社区讨论':'sector-discuss',
+    '技术更新':'sector-tech', '监管政策':'sector-reg',
+  };
+  return map[sector] || 'sector-news';
+}
 
 function _classifySource(src) {
   if (!src) return 'rss';
@@ -643,11 +787,216 @@ function _sourceTag(src) {
   return `<span class="news-source ${cls[type] || 'src-rss'}">${labels[type] || src}</span>`;
 }
 
-function _esc(s) {
-  if (!s) return '';
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+/* ── OVERVIEW ───────────────────────────────────────────── */
+
+function updateOverview() {
+  const o = DATA.overview || {};
+  const $ = id => document.getElementById(id);
+  if ($('stat-total'))  $('stat-total').textContent  = Number(o.today_total ?? 0).toLocaleString('zh-CN');
+  if ($('stat-pos'))    $('stat-pos').textContent    = (o.positive_pct ?? 0).toFixed(1) + '%';
+  if ($('stat-neg'))    $('stat-neg').textContent    = (o.negative_pct ?? 0).toFixed(1) + '%';
+  if ($('stat-neu'))    $('stat-neu').textContent    = (o.neutral_pct ?? 0).toFixed(1) + '%';
+  if ($('stat-alerts')) $('stat-alerts').textContent = o.active_alerts ?? 0;
+}
+
+/* ── RISK PANEL ─────────────────────────────────────────── */
+
+function renderRiskPanel() {
+  const el = document.getElementById('riskList');
+  const badge = document.getElementById('badge-risk');
+  if (!el) return;
+  const items = DATA.risk_alerts || [];
+  if (badge) badge.textContent = items.length + ' 条';
+
+  if (!items.length) {
+    el.innerHTML = '<p style="color:var(--green);font-size:13px;padding:12px 0">✅ 暂无高风险预警</p>';
+    const panel = document.getElementById('riskPanel');
+    if (panel) panel.style.borderColor = 'var(--green)';
+    return;
+  }
+
+  el.innerHTML = items.map(a => {
+    const score = a.risk_score || 0;
+    const color = _riskColor(score);
+    const isCritical = score >= 80;
+    const srcTag = _sourceTag(a.source);
+    const summary = a.llm_summary_zh ? `<div class="risk-summary">${_esc(a.llm_summary_zh)}</div>` : '';
+    const sectorTag = a.llm_sector ? `<span class="sector-tag ${_sectorClass(a.llm_sector)}">${_esc(a.llm_sector)}</span>` : '';
+    const riskLabel = a.llm_risk_level ? a.llm_risk_level.toUpperCase() : (score >= 80 ? 'CRITICAL' : score >= 60 ? 'HIGH' : 'MEDIUM');
+
+    return `<a class="risk-item ${isCritical ? 'risk-critical' : ''}" href="${_esc(a.link || '#')}" target="_blank" rel="noopener">
+      <div class="risk-bar">
+        <div class="risk-score-num" style="color:${color}">${score}</div>
+        <div class="risk-score-label" style="color:${color}">${riskLabel}</div>
+      </div>
+      <div class="risk-body">
+        <div class="risk-title">${_esc(a.title)}</div>
+        ${summary}
+        <div class="risk-meta">
+          ${srcTag} ${sectorTag}
+          <span style="color:var(--text-3)">&middot;</span>
+          <span>${_esc(a.time_ago || '')}</span>
+        </div>
+      </div>
+    </a>`;
+  }).join('');
+}
+
+/* ── AI STATS ───────────────────────────────────────────── */
+
+function renderAIStats() {
+  const stats = DATA.llm_stats || {};
+  const $ = id => document.getElementById(id);
+
+  // Coverage
+  const analyzed = stats.analyzed || 0;
+  const total = stats.total || 0;
+  const pct = total > 0 ? ((analyzed / total) * 100).toFixed(1) : '0';
+  if ($('ai-coverage')) $('ai-coverage').textContent = pct + '%';
+  if ($('ai-coverage-sub')) $('ai-coverage-sub').textContent = `${analyzed.toLocaleString()} / ${total.toLocaleString()} 篇`;
+
+  // Sector distribution
+  const sectorEl = $('sectorDist');
+  if (sectorEl) {
+    const sectors = stats.sector_dist || [];
+    const maxVal = Math.max(1, ...sectors.map(s => s.value));
+    if (!sectors.length) {
+      sectorEl.innerHTML = '<div style="color:var(--text-3);font-size:12px">暂无数据</div>';
+    } else {
+      sectorEl.innerHTML = sectors.map(s => {
+        const w = ((s.value / maxVal) * 100).toFixed(0);
+        return `<div class="dist-bar">
+          <div class="dist-label">${_esc(s.name)}</div>
+          <div class="dist-track"><div class="dist-fill" style="width:${w}%;background:${s.color || 'var(--primary)'}"></div></div>
+          <div class="dist-count">${s.value}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Category distribution
+  const catEl = $('categoryDist');
+  if (catEl) {
+    const cats = stats.category_dist || [];
+    const maxVal = Math.max(1, ...cats.map(c => c.value));
+    const catColors = { '新闻':'#2563eb', '干货':'#16a34a', '视频':'#ea580c',
+                        '讨论':'#6366f1', '公告':'#C23631', '广告':'#9ca3af' };
+    if (!cats.length) {
+      catEl.innerHTML = '<div style="color:var(--text-3);font-size:12px">暂无数据</div>';
+    } else {
+      catEl.innerHTML = cats.map(c => {
+        const w = ((c.value / maxVal) * 100).toFixed(0);
+        const color = catColors[c.name] || '#94a3b8';
+        return `<div class="dist-bar">
+          <div class="dist-label">${_esc(c.name)}</div>
+          <div class="dist-track"><div class="dist-fill" style="width:${w}%;background:${color}"></div></div>
+          <div class="dist-count">${c.value}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+/* ── PLATFORM CHART ─────────────────────────────────────── */
+
+function renderPlatformChart() {
+  const el = document.getElementById('platformChart');
+  if (!el) return;
+  const platforms = DATA.platform_stats || [];
+
+  if (!platforms.length || platforms.every(p => p.total === 0)) {
+    el.innerHTML = '<p style="color:var(--text-3);font-size:12px">暂无数据</p>';
+    return;
+  }
+
+  const maxTotal = Math.max(1, ...platforms.map(p => p.total));
+
+  el.innerHTML = platforms.filter(p => p.total > 0).map(p => {
+    const total = p.total || 1;
+    const posW = ((p.positive / total) * 100).toFixed(1);
+    const neuW = ((p.neutral / total) * 100).toFixed(1);
+    const negW = (100 - parseFloat(posW) - parseFloat(neuW)).toFixed(1);
+    const trackW = ((p.total / maxTotal) * 100).toFixed(0);
+
+    return `<div class="platform-bar-row">
+      <div class="platform-name">${_esc(p.name)}</div>
+      <div class="platform-track" style="width:${trackW}%">
+        <div class="platform-seg" style="width:${posW}%;background:var(--green)"></div>
+        <div class="platform-seg" style="width:${neuW}%;background:var(--yellow)"></div>
+        <div class="platform-seg" style="width:${negW}%;background:var(--red)"></div>
+      </div>
+      <div class="platform-count">${p.total}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── NEWS LIST ──────────────────────────────────────────── */
+
+let _currentSectorFilter = '';
+let _currentRiskSort = '';
+
+function renderNews() {
+  const el = document.getElementById('newsList');
+  if (!el) return;
+
+  // Use risk_alerts as the main news source (richer data), fall back to alerts
+  let items = (DATA.risk_alerts && DATA.risk_alerts.length) ? [...DATA.risk_alerts] : [...(DATA.alerts || [])];
+
+  // Sector filter
+  if (_currentSectorFilter) {
+    items = items.filter(a => (a.llm_sector || '') === _currentSectorFilter);
+  }
+
+  // Risk sort
+  if (_currentRiskSort === 'desc') {
+    items.sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
+  } else if (_currentRiskSort === 'asc') {
+    items.sort((a, b) => (a.risk_score || 0) - (b.risk_score || 0));
+  }
+
+  if (!items.length) {
+    el.innerHTML = '<p style="color:var(--text-3);font-size:13px;padding:12px 0">暂无新闻</p>';
+    return;
+  }
+
+  el.innerHTML = items.map(a => {
+    const srcTag = _sourceTag(a.source);
+    const score = a.sentiment_score ?? a.score ?? 0;
+    const scoreColor = score < -0.2 ? 'var(--red)' : score > 0.2 ? 'var(--green)' : 'var(--text-2)';
+
+    const riskScore = a.risk_score;
+    let riskBadge = '';
+    if (riskScore != null) {
+      riskBadge = `<div class="news-risk-badge" style="color:${_riskColor(riskScore)};background:${_riskBg(riskScore)}">${riskScore}</div>`;
+    }
+
+    const sectorTag = a.llm_sector ? `<span class="sector-tag ${_sectorClass(a.llm_sector)}" style="margin-right:4px">${_esc(a.llm_sector)}</span>` : '';
+
+    const summaryLine = a.llm_summary_zh ? `<div class="news-llm-summary">${_esc(a.llm_summary_zh)}</div>` : '';
+
+    return `<a class="news-item" href="${_esc(a.link || '#')}" target="_blank" rel="noopener">
+      ${riskBadge}
+      ${srcTag}
+      ${sectorTag}
+      <div class="news-content">
+        <div class="news-title">${_esc(a.title)}</div>
+        ${summaryLine}
+      </div>
+      <div class="news-score" style="color:${scoreColor}">${score.toFixed(2)}</div>
+      <div class="news-time">${_esc(a.time_ago || '')}</div>
+    </a>`;
+  }).join('');
+}
+
+function populateSectorFilter() {
+  const sel = document.getElementById('filterSector');
+  if (!sel) return;
+  const sectors = (DATA.llm_stats && DATA.llm_stats.sector_dist) || [];
+  // Keep default "全部板块" option
+  sel.innerHTML = '<option value="">全部板块</option>';
+  sectors.forEach(s => {
+    sel.innerHTML += `<option value="${_esc(s.name)}">${_esc(s.name)} (${s.value})</option>`;
+  });
 }
 
 /* ── MARKET ─────────────────────────────────────────────── */
@@ -732,7 +1081,6 @@ function drawSentimentChart() {
   function drawLine(data, lineColor, areaColor) {
     if (!data.length) return;
     const p = pts(data);
-    /* area */
     ctx.beginPath();
     ctx.moveTo(p[0].x, PAD.top + cH);
     ctx.lineTo(p[0].x, p[0].y);
@@ -747,7 +1095,6 @@ function drawSentimentChart() {
     g.addColorStop(0.7, areaColor.replace(/[\d.]+\)$/, '0.02)'));
     g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; ctx.fill();
-    /* line */
     ctx.beginPath();
     ctx.moveTo(p[0].x, p[0].y);
     for (let i = 1; i < p.length; i++) {
@@ -756,7 +1103,6 @@ function drawSentimentChart() {
     }
     ctx.strokeStyle = lineColor; ctx.lineWidth = 2;
     ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
-    /* dot */
     const last = p[p.length - 1];
     ctx.beginPath(); ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
     ctx.fillStyle = lineColor; ctx.fill();
@@ -772,15 +1118,28 @@ function drawSentimentChart() {
 
 function renderAll_inner() {
   updateOverview();
-  updateMarket();
-  renderAlerts();
+  renderRiskPanel();
+  renderAIStats();
+  renderPlatformChart();
+  populateSectorFilter();
   renderNews();
+  updateMarket();
   drawSentimentChart();
 }
 
 async function renderAll() {
   await loadData();
   renderAll_inner();
+
+  // Wire up filter/sort controls
+  document.getElementById('filterSector').addEventListener('change', e => {
+    _currentSectorFilter = e.target.value;
+    renderNews();
+  });
+  document.getElementById('sortRisk').addEventListener('change', e => {
+    _currentRiskSort = e.target.value;
+    renderNews();
+  });
 }
 
 window.addEventListener('load', renderAll);

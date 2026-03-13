@@ -486,6 +486,124 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "price_history":  price_history,
     }
 
+    # ── Risk alerts (risk_score >= 60 in last 24h) ─────────────────────────
+    risk_alerts: list[dict] = []
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(raw_articles)")}
+    if "risk_score" in existing_cols:
+        _extra_risk = ""
+        if "llm_summary_zh" in existing_cols:
+            _extra_risk += ", llm_summary_zh"
+        if "llm_sector" in existing_cols:
+            _extra_risk += ", llm_sector"
+        if "llm_risk_level" in existing_cols:
+            _extra_risk += ", llm_risk_level"
+
+        risk_rows = conn.execute(
+            "SELECT title, source, link, risk_score, sentiment_score, "
+            "       published_at"
+            f"{_extra_risk} "
+            "FROM raw_articles "
+            "WHERE risk_score >= 60 AND collected_at >= ? "
+            "ORDER BY risk_score DESC LIMIT 20",
+            (cutoff_24,),
+        ).fetchall()
+
+        for rr in risk_rows:
+            rd: dict = {
+                "title": rr[0], "source": rr[1], "link": rr[2],
+                "risk_score": rr[3], "sentiment_score": rr[4],
+                "time_ago": _time_ago(rr[5], now),
+            }
+            idx = 6
+            if "llm_summary_zh" in existing_cols:
+                rd["llm_summary_zh"] = rr[idx]; idx += 1
+            if "llm_sector" in existing_cols:
+                rd["llm_sector"] = rr[idx]; idx += 1
+            if "llm_risk_level" in existing_cols:
+                rd["llm_risk_level"] = rr[idx]; idx += 1
+            risk_alerts.append(rd)
+
+    # ── LLM stats ────────────────────────────────────────────────────────
+    llm_stats: dict = {"analyzed": 0, "total": 0,
+                       "sector_dist": [], "category_dist": []}
+    if "llm_analyzed" in existing_cols:
+        row_total = conn.execute("SELECT COUNT(*) FROM raw_articles").fetchone()
+        row_analyzed = conn.execute(
+            "SELECT COUNT(*) FROM raw_articles WHERE llm_analyzed = 1"
+        ).fetchone()
+        llm_stats["total"] = row_total[0] if row_total else 0
+        llm_stats["analyzed"] = row_analyzed[0] if row_analyzed else 0
+
+    if "llm_sector" in existing_cols:
+        sector_rows = conn.execute(
+            "SELECT llm_sector, COUNT(*) FROM raw_articles "
+            "WHERE llm_sector IS NOT NULL "
+            "GROUP BY llm_sector ORDER BY COUNT(*) DESC"
+        ).fetchall()
+        _sector_colors = {
+            "明星公司动态": "#C23631", "大佬动态": "#6366f1",
+            "行业新闻": "#2563eb", "社区讨论": "#16a34a",
+            "技术更新": "#ea580c", "监管政策": "#dc2626",
+        }
+        llm_stats["sector_dist"] = [
+            {"name": s, "value": c,
+             "color": _sector_colors.get(s, "#94a3b8")}
+            for s, c in sector_rows
+        ]
+
+    if "llm_category" in existing_cols:
+        cat_rows = conn.execute(
+            "SELECT llm_category, COUNT(*) FROM raw_articles "
+            "WHERE llm_category IS NOT NULL "
+            "GROUP BY llm_category ORDER BY COUNT(*) DESC"
+        ).fetchall()
+        llm_stats["category_dist"] = [
+            {"name": c, "value": v} for c, v in cat_rows
+        ]
+
+    # ── Platform stats (article count + sentiment by platform) ───────────
+    _platform_sources = {
+        "Twitter/X": ["apify_twitter"],
+        "Reddit":    ["apify_reddit"],
+        "YouTube":   ["apify_youtube"],
+        "TikTok":    ["apify_tiktok"],
+        "微博":      ["apify_weibo"],
+        "B站":       ["bilibili"],
+        "RSS新闻":   [
+            "CoinDesk", "CoinTelegraph", "Decrypt", "TheBlock", "Blockworks",
+            "BitcoinMagazine", "DLNews", "Protos", "TheDefiant",
+            "BlockBeats", "JinSeCaiJing", "PANews", "ShenChaoTechFlow",
+            "Bitpush", "8BTC", "BlockTempo", "GoogleNews_TRON",
+            "GoogleNews_JustinSun", "Reuters_Tech", "BBC_Crypto",
+            "Guardian_Crypto", "SCMP_Crypto", "Forbes_Crypto",
+            "baidu_news", "crypto_panic", "apify_google",
+        ],
+    }
+    platform_stats: list[dict] = []
+    for platform_name, sources in _platform_sources.items():
+        placeholders = ",".join(["?"] * len(sources))
+        p_total = conn.execute(
+            f"SELECT COUNT(*) FROM raw_articles WHERE source IN ({placeholders})",
+            sources,
+        ).fetchone()[0]
+        p_pos = 0; p_neg = 0; p_neu = 0
+        if "sentiment_label" in existing_cols:
+            for lbl_name, counter_ref in [
+                ("positive", "p_pos"), ("negative", "p_neg"), ("neutral", "p_neu")
+            ]:
+                val = conn.execute(
+                    f"SELECT COUNT(*) FROM raw_articles "
+                    f"WHERE source IN ({placeholders}) AND sentiment_label = ?",
+                    sources + [lbl_name],
+                ).fetchone()[0]
+                if lbl_name == "positive": p_pos = val
+                elif lbl_name == "negative": p_neg = val
+                else: p_neu = val
+        platform_stats.append({
+            "name": platform_name, "total": p_total,
+            "positive": p_pos, "negative": p_neg, "neutral": p_neu,
+        })
+
     return {
         "generated_at":     now.isoformat(),
         "overview": {
@@ -499,6 +617,9 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "alerts":           alerts_out,
         "language_volumes": lang_vols,
         "market":           market,
+        "risk_alerts":      risk_alerts,
+        "llm_stats":        llm_stats,
+        "platform_stats":   platform_stats,
     }
 
 
