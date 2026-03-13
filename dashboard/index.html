@@ -443,6 +443,71 @@
     .delta-up   { color: var(--green); font-weight: 600; }
     .delta-down { color: var(--red); font-weight: 600; }
 
+    /* ANOMALY BADGES */
+    .anomaly-bar {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      margin-top: 10px;
+    }
+    .anomaly-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 700;
+      padding: 5px 14px; border-radius: 20px;
+      background: var(--red-dim);
+      color: var(--red);
+      border: 1px solid rgba(220,38,38,0.35);
+      animation: pulse-badge 2s ease-in-out infinite;
+    }
+    .anomaly-badge.type-neg {
+      background: var(--orange-dim);
+      color: var(--orange);
+      border-color: rgba(234,88,12,0.35);
+    }
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.72; }
+    }
+
+    /* 7-DAY TREND CHART */
+    .trend-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 900px) {
+      .trend-grid { grid-template-columns: 1fr; }
+    }
+    canvas.trend-canvas { display: block; width: 100%; height: 220px; }
+
+    /* HOT KEYWORDS */
+    .kw-list {
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    .kw-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .kw-rank {
+      font-size: 11px; font-weight: 700;
+      min-width: 22px; text-align: right;
+      color: var(--text-3);
+    }
+    .kw-rank.top3 { color: var(--primary); }
+    .kw-word {
+      font-size: 13px; font-weight: 600; color: var(--text-1);
+      min-width: 90px;
+    }
+    .kw-track {
+      flex: 1; height: 12px; background: var(--bg);
+      border-radius: 6px; overflow: hidden;
+    }
+    .kw-fill {
+      height: 100%; border-radius: 6px;
+      background: var(--primary);
+      transition: width 0.4s ease;
+    }
+    .kw-count {
+      font-size: 11px; color: var(--text-3); min-width: 28px;
+    }
+
     /* FOOTER */
     footer {
       text-align: center; padding: 16px 36px 20px;
@@ -532,6 +597,59 @@
       <div class="stat-value c-orange" id="stat-alerts">--</div>
       <div class="stat-hint">今日负面预警数</div>
     </div>
+  </div>
+
+  <!-- ANOMALY INDICATORS -->
+  <div id="anomalySection" style="display:none">
+    <div class="section-label">异常检测</div>
+    <div class="card" style="border-color:var(--red)">
+      <div class="card-head">
+        <div class="card-title" style="color:var(--red)">趋势异常预警</div>
+        <span class="badge" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,0.3)">实时</span>
+      </div>
+      <div class="card-sub">基于过去7天基准线的声量和情感异常检测</div>
+      <div class="anomaly-bar" id="anomalyBar"></div>
+    </div>
+  </div>
+
+  <!-- 7-DAY TREND -->
+  <div class="section-label">7天趋势</div>
+  <div class="trend-grid">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">声量趋势（7天）</div>
+        <span class="badge badge-live">7D</span>
+      </div>
+      <div class="card-sub">过去7天每日文章总数</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--primary)"></div>日声量</div>
+      </div>
+      <canvas id="volumeTrendChart" class="trend-canvas"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">情感趋势（7天）</div>
+        <span class="badge badge-live">7D</span>
+      </div>
+      <div class="card-sub">过去7天每日正面 / 中性 / 负面文章数</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--yellow)"></div>中性</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>负面</div>
+      </div>
+      <canvas id="sentimentTrendChart" class="trend-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- HOT KEYWORDS -->
+  <div class="section-label">热词排行</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">最近24小时热词 Top 20</div>
+      <span class="badge badge-live">24H</span>
+    </div>
+    <div class="card-sub">从最近24小时文章标题中提取的高频关键词（已去除停用词）</div>
+    <div class="kw-list" id="hotKeywords"></div>
   </div>
 
   <!-- AI ANALYSIS STATS -->
@@ -667,6 +785,7 @@ const _MOCK = {
   risk_alerts: [],
   llm_stats: { analyzed: 0, total: 0, sector_dist: [], category_dist: [] },
   platform_stats: [],
+  trends: { daily_volume: [], daily_sentiment: [], hot_keywords: [], anomalies: [], platform_trends: [] },
 };
 
 /* ── DATA STATE ─────────────────────────────────────────── */
@@ -1114,17 +1233,225 @@ function drawSentimentChart() {
   drawLine(pos, '#16a34a', 'rgba(22,163,74,0.14)');
 }
 
+/* ── ANOMALY INDICATORS ─────────────────────────────────── */
+
+function renderAnomalies() {
+  const trends  = DATA.trends || {};
+  const anomalies = trends.anomalies || [];
+  const section = document.getElementById('anomalySection');
+  const bar     = document.getElementById('anomalyBar');
+  if (!section || !bar) return;
+
+  if (!anomalies.length) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+  bar.innerHTML = anomalies.map(a => {
+    const isNeg  = a.type === '负面激增';
+    const cls    = isNeg ? 'anomaly-badge type-neg' : 'anomaly-badge';
+    const arrow  = '↑';
+    const pctStr = a.pct != null ? ` ${arrow}${a.pct}%` : '';
+    return `<div class="${cls}" title="${_esc(a.detail || '')}">${_esc(a.type)}${pctStr}</div>`;
+  }).join('');
+}
+
+/* ── 7-DAY VOLUME TREND CHART ───────────────────────────── */
+
+function _drawBarChart(canvas, labels, values, color) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width  = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const N   = values.length;
+  if (!N) return;
+  const PAD = { top: 18, right: 14, bottom: 34, left: 48 };
+  const cW  = w - PAD.left - PAD.right;
+  const cH  = h - PAD.top  - PAD.bottom;
+  const maxV = Math.max(1, ...values);
+
+  // Grid lines
+  [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
+    const yv = Math.round(maxV * frac);
+    const y  = PAD.top + cH * (1 - frac);
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#9ca3af'; ctx.font = '11px system-ui';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(yv, PAD.left - 6, y);
+  });
+
+  const barW = Math.max(2, cW / N - 4);
+  const step = cW / N;
+
+  values.forEach((v, i) => {
+    const barH = (v / maxV) * cH;
+    const x    = PAD.left + step * i + (step - barW) / 2;
+    const y    = PAD.top + cH - barH;
+
+    // Gradient fill
+    const g = ctx.createLinearGradient(0, y, 0, PAD.top + cH);
+    g.addColorStop(0, color);
+    g.addColorStop(1, color.replace(/[\d.]+\)$/, '0.3)'));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    const r = Math.min(4, barW / 2);
+    ctx.roundRect ? ctx.roundRect(x, y, barW, barH, [r, r, 0, 0]) : ctx.rect(x, y, barW, barH);
+    ctx.fill();
+
+    // X-label (short date mm/dd)
+    if (labels[i]) {
+      const lbl = labels[i].slice(5); // "MM-DD"
+      ctx.fillStyle = '#9ca3af'; ctx.font = '10px system-ui';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(lbl, x + barW / 2, PAD.top + cH + 6);
+    }
+  });
+}
+
+function drawVolumeTrendChart() {
+  const canvas = document.getElementById('volumeTrendChart');
+  if (!canvas) return;
+  const daily = (DATA.trends || {}).daily_volume || [];
+  if (!daily.length) {
+    const { ctx, W: w, H: h } = setupCanvas(canvas);
+    ctx.fillStyle = '#9ca3af'; ctx.font = '13px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('暂无趋势数据', w / 2, h / 2);
+    return;
+  }
+  const labels = daily.map(d => d.date);
+  const values = daily.map(d => d.count);
+  _drawBarChart(canvas, labels, values, 'rgba(194,54,49,0.8)');
+}
+
+/* ── 7-DAY SENTIMENT TREND CHART ────────────────────────── */
+
+function drawSentimentTrendChart() {
+  const canvas = document.getElementById('sentimentTrendChart');
+  if (!canvas) return;
+  const daily = (DATA.trends || {}).daily_sentiment || [];
+
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width  = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const N = daily.length;
+  if (!N) {
+    ctx.fillStyle = '#9ca3af'; ctx.font = '13px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('暂无趋势数据', w / 2, h / 2);
+    return;
+  }
+
+  const PAD  = { top: 18, right: 14, bottom: 34, left: 48 };
+  const cW   = w - PAD.left - PAD.right;
+  const cH   = h - PAD.top  - PAD.bottom;
+  const allV = daily.flatMap(d => [d.positive, d.neutral, d.negative]);
+  const maxV = Math.max(1, ...allV);
+
+  // Grid
+  [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
+    const yv = Math.round(maxV * frac);
+    const y  = PAD.top + cH * (1 - frac);
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y);
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#9ca3af'; ctx.font = '11px system-ui';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(yv, PAD.left - 6, y);
+  });
+
+  // X-labels
+  daily.forEach((d, i) => {
+    const x   = PAD.left + (N > 1 ? (cW / (N - 1)) * i : cW / 2);
+    const lbl = d.date ? d.date.slice(5) : '';
+    ctx.fillStyle = '#9ca3af'; ctx.font = '10px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText(lbl, x, PAD.top + cH + 6);
+  });
+
+  function drawLine7(key, lineColor, areaColor) {
+    const pts = daily.map((d, i) => ({
+      x: PAD.left + (N > 1 ? (cW / (N - 1)) * i : cW / 2),
+      y: PAD.top + cH * (1 - (d[key] || 0) / maxV),
+    }));
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, PAD.top + cH);
+    ctx.lineTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      const cpx = (pts[i-1].x + pts[i].x) / 2;
+      ctx.bezierCurveTo(cpx, pts[i-1].y, cpx, pts[i].y, pts[i].x, pts[i].y);
+    }
+    ctx.lineTo(pts[pts.length-1].x, PAD.top + cH);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+    g.addColorStop(0, areaColor); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      const cpx = (pts[i-1].x + pts[i].x) / 2;
+      ctx.bezierCurveTo(cpx, pts[i-1].y, cpx, pts[i].y, pts[i].x, pts[i].y);
+    }
+    ctx.strokeStyle = lineColor; ctx.lineWidth = 2;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+  }
+
+  drawLine7('neutral',  '#ca8a04', 'rgba(202,138,4,0.10)');
+  drawLine7('negative', '#dc2626', 'rgba(220,38,38,0.12)');
+  drawLine7('positive', '#16a34a', 'rgba(22,163,74,0.13)');
+}
+
+/* ── HOT KEYWORDS ───────────────────────────────────────── */
+
+function renderHotKeywords() {
+  const el = document.getElementById('hotKeywords');
+  if (!el) return;
+  const keywords = ((DATA.trends || {}).hot_keywords) || [];
+  if (!keywords.length) {
+    el.innerHTML = '<p style="color:var(--text-3);font-size:12px">暂无热词数据</p>';
+    return;
+  }
+  const maxCount = Math.max(1, ...keywords.map(k => k.count));
+  const colors   = ['#C23631','#6366f1','#2563eb','#ea580c','#16a34a'];
+  el.innerHTML = keywords.slice(0, 20).map((k, i) => {
+    const pct  = ((k.count / maxCount) * 100).toFixed(0);
+    const color= colors[i % colors.length];
+    const topCls = i < 3 ? 'kw-rank top3' : 'kw-rank';
+    return `<div class="kw-row">
+      <div class="${topCls}">#${i+1}</div>
+      <div class="kw-word">${_esc(k.word)}</div>
+      <div class="kw-track"><div class="kw-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="kw-count">${k.count}</div>
+    </div>`;
+  }).join('');
+}
+
 /* ── INIT ───────────────────────────────────────────────── */
 
 function renderAll_inner() {
   updateOverview();
   renderRiskPanel();
+  renderAnomalies();
   renderAIStats();
   renderPlatformChart();
   populateSectorFilter();
   renderNews();
   updateMarket();
   drawSentimentChart();
+  drawVolumeTrendChart();
+  drawSentimentTrendChart();
+  renderHotKeywords();
 }
 
 async function renderAll() {
@@ -1143,7 +1470,11 @@ async function renderAll() {
 }
 
 window.addEventListener('load', renderAll);
-window.addEventListener('resize', drawSentimentChart);
+window.addEventListener('resize', () => {
+  drawSentimentChart();
+  drawVolumeTrendChart();
+  drawSentimentTrendChart();
+});
 </script>
 
 </body>

@@ -20,6 +20,8 @@ Executes in order:
     Step 14  LLM Deep Analysis       analyzers/llm_analyzer.py
     Step 15  Risk Scoring            analyzers/risk_scorer.py
     Step 16  Instant Alerts          alerting/instant_alert.py
+    Step 17  Trend Analysis          analyzers/trend_analyzer.py
+    Step 18  Daily Reports           reporters/daily_report.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -71,7 +73,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 17         # update when adding / removing pipeline steps
+_TOTAL_STEPS = 18         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -256,6 +258,12 @@ def do_instant_alerts() -> int:
         return 0
     from alerting.instant_alert import send_critical_alerts  # noqa: PLC0415
     return send_critical_alerts(DB_PATH)
+
+
+def do_analyze_trends() -> dict:
+    """Trend analysis (7-day volume / sentiment / hot keywords) → returns result dict."""
+    from analyzers.trend_analyzer import analyze_trends  # noqa: PLC0415
+    return analyze_trends(DB_PATH)
 
 
 def do_send_daily_reports() -> int:
@@ -604,6 +612,31 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
             "positive": p_pos, "negative": p_neg, "neutral": p_neu,
         })
 
+    # ── Trend data (from trend_data table, written by trend_analyzer) ────────
+    trends: dict = {
+        "daily_volume":    [],
+        "daily_sentiment": [],
+        "hot_keywords":    [],
+        "anomalies":       [],
+        "platform_trends": [],
+    }
+    try:
+        trend_cols = {row[1] for row in conn.execute("PRAGMA table_info(trend_data)")}
+        if trend_cols:
+            for metric_name in trends:
+                row = conn.execute(
+                    "SELECT metric_value_json FROM trend_data "
+                    "WHERE metric_name = ? ORDER BY date DESC LIMIT 1",
+                    (metric_name,),
+                ).fetchone()
+                if row and row[0]:
+                    try:
+                        trends[metric_name] = json.loads(row[0])
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
     return {
         "generated_at":     now.isoformat(),
         "overview": {
@@ -620,6 +653,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "risk_alerts":      risk_alerts,
         "llm_stats":        llm_stats,
         "platform_stats":   platform_stats,
+        "trends":           trends,
     }
 
 
@@ -803,8 +837,22 @@ def main() -> None:
     if ok:
         print(f"     已推送   : {val} 条告警")
 
-    # ── Step 17: Daily Reports (Feishu Webhook) ───────────────────────────
-    val, ok = run_step(17, "生成并发送日报（飞书 Webhook）",
+    # ── Step 17: Trend Analysis ───────────────────────────────────────────
+    val, ok = run_step(17, "趋势分析（7天声量 / 情感 / 热词 / 异常检测）",
+                       do_analyze_trends)
+    step_ok["trend_analysis"] = ok
+    if ok and isinstance(val, dict):
+        anomalies = val.get("anomalies", [])
+        kw_count  = len(val.get("hot_keywords", []))
+        print(f"     热词数量 : {kw_count} 个")
+        if anomalies:
+            for a in anomalies:
+                print(f"     ⚠ {a['type']} : ↑{a['pct']}%")
+        else:
+            print("     无异常检测")
+
+    # ── Step 18: Daily Reports (Feishu Webhook) ───────────────────────────
+    val, ok = run_step(18, "生成并发送日报（飞书 Webhook）",
                        do_send_daily_reports)
     step_ok["daily_reports"] = ok
     if ok:

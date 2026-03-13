@@ -1,0 +1,155 @@
+# TRON Sentinel – RSS source configuration
+# ──────────────────────────────────────────────────────────────────────────────
+# To add a new source: append a block below – no code changes needed.
+# To disable a source: set  enabled: false
+#
+# Fields:
+#   name     – unique identifier (stored as `source` in the database)
+#   url      – RSS / Atom feed URL
+#   language – ISO 639-1 code: en | zh | ja | ko …
+#   category – human-readable group label (for display only)
+#   enabled  – true | false
+
+sources:
+
+  # ── English crypto media ────────────────────────────────────────────────────
+  - name:     CoinDesk
+    url:      https://feeds.feedburner.com/CoinDesk
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     CoinTelegraph
+    url:      https://cointelegraph.com/rss
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     Decrypt
+    url:      https://decrypt.co/feed
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     TheBlock
+    url:      https://www.theblock.co/rss.xml
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     Blockworks
+    url:      https://blockworks.co/feed
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     BitcoinMagazine
+    url:      https://bitcoinmagazine.com/.rss/full/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     DLNews
+    url:      https://www.dlnews.com/arc/outboundfeeds/rss/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     Protos
+    url:      https://protos.com/feed/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     TheDefiant
+    url:      https://thedefiant.io/feed
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  # ── Google News (English) ───────────────────────────────────────────────────
+  - name:     GoogleNews_TRON
+    url:      https://news.google.com/rss/search?q=TRON+TRX+cryptocurrency&hl=en&gl=US&ceid=US:en
+    language: en
+    category: Google新闻
+    enabled:  true
+
+  - name:     GoogleNews_JustinSun
+    url:      https://news.google.com/rss/search?q=Justin+Sun+TRON&hl=en&gl=US&ceid=US:en
+    language: en
+    category: Google新闻
+    enabled:  true
+
+  # ── Chinese crypto media ────────────────────────────────────────────────────
+  - name:     BlockBeats
+    url:      https://www.theblockbeats.info/rss
+    language: zh
+    category: 中文加密媒体
+    enabled:  true
+
+  - name:     JinSeCaiJing
+    url:      https://www.jinse.cn/rss
+    language: zh
+    category: 中文加密媒体
+    enabled:  true
+
+  - name:     PANews
+    url:      https://www.panewslab.com/rss/zh/index.xml
+    language: zh
+    category: 中文加密媒体
+    enabled:  true
+
+  - name:     ShenChaoTechFlow
+    url:      https://www.techflowpost.com/rss
+    language: zh
+    category: 中文加密媒体
+    enabled:  true
+
+  - name:     Bitpush
+    url:      https://www.bitpush.news/feed
+    language: zh
+    category: 中文加密媒体
+    enabled:  true
+
+  - name:     8BTC
+    url:      https://www.8btc.com/feed
+    language: zh
+    category: 中文加密媒体
+    enabled:  true
+
+  - name:     BlockTempo
+    url:      https://www.blocktempo.com/feed/
+    language: zh
+    category: 中文加密媒体
+    enabled:  true
+
+  # ── Mainstream media (via Google News search) ───────────────────────────────
+  - name:     Reuters_Tech
+    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:reuters.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     BBC_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:bbc.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     Guardian_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:theguardian.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     SCMP_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:scmp.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     Forbes_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:forbes.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
