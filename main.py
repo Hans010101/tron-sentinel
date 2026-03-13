@@ -17,6 +17,7 @@ Executes in order:
     Step 11  Baidu News RSS          collectors/baidu_collector.py
     Step 12  CryptoPanic API         collectors/crypto_panic_collector.py
     Step 13  Sentiment Analysis      analyzers/sentiment_analyzer.py
+    Step 14  LLM Deep Analysis       analyzers/llm_analyzer.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -68,7 +69,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 14         # update when adding / removing pipeline steps
+_TOTAL_STEPS = 15         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -228,9 +229,18 @@ def do_analyze_sentiment() -> int:
         conn.close()
 
 
+def do_llm_analyze() -> int:
+    """Deepseek LLM analyzer → returns count of articles analysed."""
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        logger.info("DEEPSEEK_API_KEY not set – skipping LLM analysis.")
+        return 0
+    from analyzers.llm_analyzer import analyze_articles  # noqa: PLC0415
+    return analyze_articles(DB_PATH)
+
+
 def do_send_daily_reports() -> int:
     """Generate and send daily reports via Feishu webhook → returns count sent."""
-    import os  # noqa: PLC0415
     webhook_url = os.environ.get("FEISHU_WEBHOOK_URL", "").strip()
     if not webhook_url:
         logger.info("FEISHU_WEBHOOK_URL not set – skipping daily reports.")
@@ -632,8 +642,15 @@ def main() -> None:
     if ok:
         print(f"     已分析   : {val} 条")
 
-    # ── Step 14: Daily Reports (Feishu Webhook) ───────────────────────────
-    val, ok = run_step(14, "生成并发送日报（飞书 Webhook）",
+    # ── Step 14: LLM Deep Analysis (Deepseek) ─────────────────────────────
+    val, ok = run_step(14, "LLM 深度分析（Deepseek API）",
+                       do_llm_analyze)
+    step_ok["llm_analyze"] = ok
+    if ok:
+        print(f"     已分析   : {val} 篇")
+
+    # ── Step 15: Daily Reports (Feishu Webhook) ───────────────────────────
+    val, ok = run_step(15, "生成并发送日报（飞书 Webhook）",
                        do_send_daily_reports)
     step_ok["daily_reports"] = ok
     if ok:

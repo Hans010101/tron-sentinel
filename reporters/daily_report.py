@@ -4,9 +4,12 @@ reporters/daily_report.py
 Daily report generator for TRON Sentinel.
 
 Produces three report types from the past 24 hours of data:
-    1. AI 资讯日报  – News / video articles grouped by source
+    1. AI 资讯日报  – News / video articles grouped by LLM sector (or source)
     2. AI 热点日报  – Platform highlights with engagement data
-    3. 风险预警日报  – Negative-sentiment articles ranked by score
+    3. 风险预警日报  – Negative-sentiment articles ranked by LLM risk level
+
+When LLM analysis data (llm_sector, llm_summary_zh, llm_risk_level) is
+available, it takes priority over the source-based fallback grouping.
 
 Each report is rendered as a Markdown string suitable for Feishu cards.
 
@@ -27,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 DB_PATH = Path(__file__).parent.parent / "data" / "sentinel.db"
 
-# ── Source classification ────────────────────────────────────────────────────
+# ── Source classification (fallback when LLM data unavailable) ───────────────
 
 _STAR_SOURCES = {
     "GoogleNews_JustinSun", "apify_twitter", "apify_weibo",
@@ -62,6 +65,16 @@ _SOURCE_EMOJI: dict[str, str] = {
     "crypto_panic":   "🔔",
 }
 
+# Emoji for LLM sector grouping
+_SECTOR_EMOJI: dict[str, str] = {
+    "明星公司动态": "🌟",
+    "大佬动态":     "🕶",
+    "行业新闻":     "📰",
+    "社区讨论":     "💬",
+    "技术更新":     "🔧",
+    "监管政策":     "⚖️",
+}
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -80,6 +93,22 @@ def _today_str() -> str:
     """Return today's date as YYYY-MM-DD in UTC+8."""
     utc8 = timezone(timedelta(hours=8))
     return datetime.now(utc8).strftime("%Y-%m-%d")
+
+
+def _has_column(conn: sqlite3.Connection, column: str) -> bool:
+    """Check if a column exists in raw_articles."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(raw_articles)")}
+    return column in cols
+
+
+def _has_llm_data(conn: sqlite3.Connection) -> bool:
+    """Return True if any article has LLM analysis data."""
+    if not _has_column(conn, "llm_analyzed"):
+        return False
+    row = conn.execute(
+        "SELECT COUNT(*) FROM raw_articles WHERE llm_analyzed = 1"
+    ).fetchone()
+    return row[0] > 0
 
 
 def _extract_engagement(summary: str) -> dict[str, int]:
@@ -133,27 +162,109 @@ def _truncate(text: str, max_len: int = 60) -> str:
     return text if len(text) <= max_len else text[: max_len - 1] + "…"
 
 
+def _display_text(row: sqlite3.Row) -> str:
+    """Return LLM summary if available, else truncated title."""
+    llm_summary = row["llm_summary_zh"] if "llm_summary_zh" in row.keys() else None
+    if llm_summary:
+        return _truncate(llm_summary, 80)
+    return _truncate(row["title"])
+
+
 # ── Report 1: AI 资讯日报 ────────────────────────────────────────────────────
 
 
 def generate_news_report(conn: sqlite3.Connection) -> str:
     """
-    AI 资讯日报 – News and video articles grouped by category.
-
-    Sections:
-        🌟 明星公司动态  (Justin Sun / TRON official sources)
-        📰 新闻汇总      (crypto media & mainstream media)
-        🕶 大佬动态      (social media posts from key figures)
-        🌊 YouTube更新   (YouTube / Bilibili / TikTok videos)
+    AI 资讯日报 – Articles grouped by LLM sector when available,
+    falling back to source-based grouping.
     """
     cutoff = _cutoff_iso()
+    has_llm = _has_llm_data(conn)
+
+    # Select LLM fields if they exist
+    extra_cols = ""
+    if _has_column(conn, "llm_sector"):
+        extra_cols = ", llm_sector, llm_summary_zh"
+
     rows = conn.execute(
-        "SELECT title, link, source, summary, published_at "
+        f"SELECT title, link, source, summary, published_at{extra_cols} "
         "FROM raw_articles WHERE collected_at >= ? "
         "ORDER BY published_at DESC",
         (cutoff,),
     ).fetchall()
 
+    lines: list[str] = [
+        f"# 📋 AI 资讯日报  {_today_str()}",
+        f"过去 24 小时共收录 **{len(rows)}** 条资讯",
+        "",
+    ]
+
+    if not rows:
+        lines.append("暂无数据")
+        return "\n".join(lines)
+
+    # ── LLM sector-based grouping ────────────────────────────────────────
+    if has_llm and extra_cols:
+        sector_groups: dict[str, list] = defaultdict(list)
+        ungrouped: list = []
+
+        for r in rows:
+            sector = r["llm_sector"] if "llm_sector" in r.keys() else None
+            if sector:
+                sector_groups[sector].append(r)
+            else:
+                ungrouped.append(r)
+
+        # Render each sector
+        sector_order = [
+            "明星公司动态", "大佬动态", "行业新闻",
+            "监管政策", "技术更新", "社区讨论",
+        ]
+        for sector in sector_order:
+            items = sector_groups.get(sector, [])
+            if not items:
+                continue
+            emoji = _SECTOR_EMOJI.get(sector, "📌")
+            lines.append(f"## {emoji} {sector} ({len(items)}条)")
+            lines.append("")
+            for it in items[:10]:
+                display = _display_text(it)
+                link = it["link"]
+                src_emoji = _SOURCE_EMOJI.get(it["source"], "")
+                lines.append(f"- {src_emoji}[{display}]({link})")
+            if len(items) > 10:
+                lines.append(f"- …及其他 {len(items) - 10} 条")
+            lines.append("")
+
+        # Render any remaining sectors not in the predefined order
+        for sector, items in sorted(sector_groups.items()):
+            if sector in sector_order:
+                continue
+            emoji = _SECTOR_EMOJI.get(sector, "📌")
+            lines.append(f"## {emoji} {sector} ({len(items)}条)")
+            lines.append("")
+            for it in items[:10]:
+                display = _display_text(it)
+                link = it["link"]
+                lines.append(f"- [{display}]({link})")
+            if len(items) > 10:
+                lines.append(f"- …及其他 {len(items) - 10} 条")
+            lines.append("")
+
+        # Ungrouped (no LLM sector)
+        if ungrouped:
+            lines.append(f"## 📌 其他 ({len(ungrouped)}条)")
+            lines.append("")
+            for it in ungrouped[:8]:
+                t = _truncate(it["title"])
+                lines.append(f"- [{t}]({it['link']})")
+            if len(ungrouped) > 8:
+                lines.append(f"- …及其他 {len(ungrouped) - 8} 条")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    # ── Fallback: source-based grouping ──────────────────────────────────
     star: dict[str, list] = defaultdict(list)
     news: dict[str, list] = defaultdict(list)
     kol:  dict[str, list] = defaultdict(list)
@@ -172,12 +283,6 @@ def generate_news_report(conn: sqlite3.Connection) -> str:
             news[src].append(item)
         else:
             news[src].append(item)
-
-    lines: list[str] = [
-        f"# 📋 AI 资讯日报  {_today_str()}",
-        f"过去 24 小时共收录 **{len(rows)}** 条资讯",
-        "",
-    ]
 
     def _render_group(title: str, groups: dict[str, list]) -> None:
         if not groups:
@@ -200,9 +305,6 @@ def generate_news_report(conn: sqlite3.Connection) -> str:
     _render_group("🕶 大佬动态", kol)
     _render_group("🌊 视频更新", video)
 
-    if not rows:
-        lines.append("暂无数据")
-
     return "\n".join(lines)
 
 
@@ -213,9 +315,12 @@ def generate_hotspot_report(conn: sqlite3.Connection) -> str:
     """
     AI 热点日报 – Platform highlights with engagement metrics.
 
-    Sections per platform: Reddit / YouTube / Twitter / TikTok / Weibo / Bilibili
+    Uses LLM summaries when available.
     """
     cutoff = _cutoff_iso()
+    has_llm_cols = _has_column(conn, "llm_summary_zh")
+
+    extra_cols = ", llm_summary_zh" if has_llm_cols else ""
 
     platform_map: dict[str, tuple[str, str]] = {
         "apify_reddit":  ("🔥 Reddit 热点",   "reddit"),
@@ -235,7 +340,7 @@ def generate_hotspot_report(conn: sqlite3.Connection) -> str:
 
     for source, (section_title, _) in platform_map.items():
         rows = conn.execute(
-            "SELECT title, link, summary, published_at "
+            f"SELECT title, link, summary, published_at{extra_cols} "
             "FROM raw_articles WHERE source = ? AND collected_at >= ? "
             "ORDER BY published_at DESC",
             (source, cutoff),
@@ -249,15 +354,15 @@ def generate_hotspot_report(conn: sqlite3.Connection) -> str:
         lines.append("")
 
         for r in rows[:10]:
-            t = _truncate(r["title"])
+            display = _display_text(r) if has_llm_cols else _truncate(r["title"])
             engagement = _extract_engagement(r["summary"])
             eng_str = _engagement_str(engagement)
             link = r["link"]
             if eng_str:
-                lines.append(f"- [{t}]({link})")
+                lines.append(f"- [{display}]({link})")
                 lines.append(f"  {eng_str}")
             else:
-                lines.append(f"- [{t}]({link})")
+                lines.append(f"- [{display}]({link})")
 
         if len(rows) > 10:
             lines.append(f"- …及其他 {len(rows) - 10} 条")
@@ -276,11 +381,11 @@ def generate_hotspot_report(conn: sqlite3.Connection) -> str:
 
 def generate_risk_report(conn: sqlite3.Connection) -> str:
     """
-    风险预警日报 – Negative-sentiment articles sorted by score (most negative first).
+    风险预警日报 – Negative-sentiment articles sorted by LLM risk level
+    when available, falling back to sentiment_score ordering.
     """
     cutoff = _cutoff_iso()
 
-    # Check if sentiment columns exist
     cols = {row[1] for row in conn.execute("PRAGMA table_info(raw_articles)")}
     if "sentiment_label" not in cols:
         return (
@@ -288,14 +393,44 @@ def generate_risk_report(conn: sqlite3.Connection) -> str:
             "情绪分析尚未运行，暂无风险预警数据。"
         )
 
-    rows = conn.execute(
-        "SELECT title, link, source, sentiment_score, published_at "
-        "FROM raw_articles "
-        "WHERE sentiment_label = 'negative' AND collected_at >= ? "
-        "ORDER BY sentiment_score ASC "
-        "LIMIT 30",
-        (cutoff,),
-    ).fetchall()
+    has_llm_risk = "llm_risk_level" in cols
+    has_llm_summary = "llm_summary_zh" in cols
+
+    extra_select = ""
+    if has_llm_risk:
+        extra_select += ", llm_risk_level"
+    if has_llm_summary:
+        extra_select += ", llm_summary_zh"
+
+    # Use LLM risk ordering when available, else sentiment_score
+    if has_llm_risk:
+        rows = conn.execute(
+            "SELECT title, link, source, sentiment_score, published_at"
+            f"{extra_select} "
+            "FROM raw_articles "
+            "WHERE sentiment_label = 'negative' AND collected_at >= ? "
+            "ORDER BY "
+            "  CASE llm_risk_level "
+            "    WHEN 'critical' THEN 0 "
+            "    WHEN 'high' THEN 1 "
+            "    WHEN 'medium' THEN 2 "
+            "    WHEN 'low' THEN 3 "
+            "    ELSE 4 "
+            "  END, "
+            "  sentiment_score ASC "
+            "LIMIT 30",
+            (cutoff,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT title, link, source, sentiment_score, published_at"
+            f"{extra_select} "
+            "FROM raw_articles "
+            "WHERE sentiment_label = 'negative' AND collected_at >= ? "
+            "ORDER BY sentiment_score ASC "
+            "LIMIT 30",
+            (cutoff,),
+        ).fetchall()
 
     lines: list[str] = [
         f"# ⚠️ 风险预警日报  {_today_str()}",
@@ -307,19 +442,32 @@ def generate_risk_report(conn: sqlite3.Connection) -> str:
         lines.append("✅ 过去 24 小时无负面舆情，一切正常！")
         return "\n".join(lines)
 
-    # Severity grouping
-    critical: list = []  # score < -0.5
-    high: list = []      # score < -0.2
-    medium: list = []    # score < 0
+    # Group by risk level
+    critical: list = []
+    high: list = []
+    medium: list = []
+    low: list = []
 
     for r in rows:
-        score = r["sentiment_score"] or 0.0
-        if score < -0.5:
-            critical.append(r)
-        elif score < -0.2:
-            high.append(r)
+        if has_llm_risk:
+            risk = r["llm_risk_level"] if "llm_risk_level" in r.keys() else None
         else:
-            medium.append(r)
+            risk = None
+
+        if risk:
+            # Use LLM risk level
+            bucket = {"critical": critical, "high": high,
+                       "medium": medium, "low": low}.get(risk, low)
+            bucket.append(r)
+        else:
+            # Fallback to sentiment_score-based grouping
+            score = r["sentiment_score"] or 0.0
+            if score < -0.5:
+                critical.append(r)
+            elif score < -0.2:
+                high.append(r)
+            else:
+                medium.append(r)
 
     def _render_risk_group(label: str, items: list) -> None:
         if not items:
@@ -327,18 +475,26 @@ def generate_risk_report(conn: sqlite3.Connection) -> str:
         lines.append(f"## {label} ({len(items)}条)")
         lines.append("")
         for r in items:
-            t = _truncate(r["title"], 55)
+            # Prefer LLM summary over title
+            if has_llm_summary and "llm_summary_zh" in r.keys() and r["llm_summary_zh"]:
+                display = _truncate(r["llm_summary_zh"], 70)
+            else:
+                display = _truncate(r["title"], 55)
             score = r["sentiment_score"] or 0.0
             src = r["source"]
             link = r["link"]
             emoji = _SOURCE_EMOJI.get(src, "📌")
-            lines.append(f"- {emoji} [{t}]({link})")
-            lines.append(f"  来源: {src} | 情绪分: {score:.2f}")
+            risk_tag = ""
+            if has_llm_risk and "llm_risk_level" in r.keys() and r["llm_risk_level"]:
+                risk_tag = f" [{r['llm_risk_level'].upper()}]"
+            lines.append(f"- {emoji} [{display}]({link})")
+            lines.append(f"  来源: {src} | 情绪分: {score:.2f}{risk_tag}")
         lines.append("")
 
-    _render_risk_group("🚨 严重风险", critical)
-    _render_risk_group("⚠️ 高风险", high)
-    _render_risk_group("💡 中等风险", medium)
+    _render_risk_group("🚨 严重风险 (Critical)", critical)
+    _render_risk_group("⚠️ 高风险 (High)", high)
+    _render_risk_group("💡 中等风险 (Medium)", medium)
+    _render_risk_group("ℹ️ 低风险 (Low)", low)
 
     return "\n".join(lines)
 
