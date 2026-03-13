@@ -18,6 +18,8 @@ Executes in order:
     Step 12  CryptoPanic API         collectors/crypto_panic_collector.py
     Step 13  Sentiment Analysis      analyzers/sentiment_analyzer.py
     Step 14  LLM Deep Analysis       analyzers/llm_analyzer.py
+    Step 15  Risk Scoring            analyzers/risk_scorer.py
+    Step 16  Instant Alerts          alerting/instant_alert.py
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -69,7 +71,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 15         # update when adding / removing pipeline steps
+_TOTAL_STEPS = 17         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -237,6 +239,23 @@ def do_llm_analyze() -> int:
         return 0
     from analyzers.llm_analyzer import analyze_articles  # noqa: PLC0415
     return analyze_articles(DB_PATH)
+
+
+def do_risk_score() -> int:
+    """Risk scorer → returns count of critical articles."""
+    from analyzers.risk_scorer import score_articles  # noqa: PLC0415
+    critical = score_articles(DB_PATH)
+    return len(critical)
+
+
+def do_instant_alerts() -> int:
+    """Instant alerts for critical risk articles → returns count sent."""
+    webhook_url = os.environ.get("FEISHU_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        logger.info("FEISHU_WEBHOOK_URL not set – skipping instant alerts.")
+        return 0
+    from alerting.instant_alert import send_critical_alerts  # noqa: PLC0415
+    return send_critical_alerts(DB_PATH)
 
 
 def do_send_daily_reports() -> int:
@@ -649,8 +668,22 @@ def main() -> None:
     if ok:
         print(f"     已分析   : {val} 篇")
 
-    # ── Step 15: Daily Reports (Feishu Webhook) ───────────────────────────
-    val, ok = run_step(15, "生成并发送日报（飞书 Webhook）",
+    # ── Step 15: Risk Scoring ───────────────────────────────────────────
+    val, ok = run_step(15, "综合风险评分（0-100）",
+                       do_risk_score)
+    step_ok["risk_score"] = ok
+    if ok:
+        print(f"     高危文章 : {val} 篇 (≥80分)")
+
+    # ── Step 16: Instant Alerts ──────────────────────────────────────────
+    val, ok = run_step(16, "即时告警推送（飞书 Webhook）",
+                       do_instant_alerts)
+    step_ok["instant_alerts"] = ok
+    if ok:
+        print(f"     已推送   : {val} 条告警")
+
+    # ── Step 17: Daily Reports (Feishu Webhook) ───────────────────────────
+    val, ok = run_step(17, "生成并发送日报（飞书 Webhook）",
                        do_send_daily_reports)
     step_ok["daily_reports"] = ok
     if ok:
