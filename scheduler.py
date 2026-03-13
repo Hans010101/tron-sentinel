@@ -3,11 +3,12 @@ scheduler.py
 ~~~~~~~~~~~~
 APScheduler-based periodic pipeline runner for TRON Sentinel.
 
-Runs the full data pipeline (main.main) every 4 hours.
-Called from entrypoint.py as a daemon thread in Cloud Run.
+Two scheduled tasks:
+    1. Data pipeline (main.main) — every 4 hours
+    2. Daily report (reporters.daily_report) — every day at 09:00 UTC+8
 
-The first run happens immediately on startup, then repeats
-at the configured interval.
+Called from entrypoint.py as a daemon thread in Cloud Run.
+The first pipeline run happens immediately on startup.
 """
 
 import logging
@@ -19,9 +20,10 @@ INTERVAL_HOURS = 4
 
 
 def main() -> None:
-    """Run the pipeline once immediately, then every INTERVAL_HOURS."""
+    """Run the pipeline once immediately, then schedule recurring jobs."""
     try:
         from apscheduler.schedulers.blocking import BlockingScheduler
+        from apscheduler.triggers.cron import CronTrigger
     except ImportError:
         logger.warning(
             "APScheduler not installed; falling back to simple loop "
@@ -31,6 +33,8 @@ def main() -> None:
         return
 
     scheduler = BlockingScheduler()
+
+    # Job 1: Data pipeline every INTERVAL_HOURS
     scheduler.add_job(
         _run_pipeline,
         "interval",
@@ -40,12 +44,22 @@ def main() -> None:
         next_run_time=None,  # don't double-run on startup
     )
 
-    # Run once immediately on startup
+    # Job 2: Daily report at 09:00 UTC+8 (= 01:00 UTC)
+    scheduler.add_job(
+        _run_daily_report,
+        CronTrigger(hour=1, minute=0, timezone="UTC"),  # 09:00 UTC+8
+        id="sentinel_daily_report",
+        name="TRON Sentinel daily report (09:00 UTC+8)",
+    )
+
+    # Run pipeline once immediately on startup
     logger.info("Running initial pipeline on startup...")
     _run_pipeline()
 
     logger.info(
-        "Scheduler started: pipeline runs every %d hours", INTERVAL_HOURS,
+        "Scheduler started: pipeline every %d hours, "
+        "daily report at 09:00 UTC+8",
+        INTERVAL_HOURS,
     )
     scheduler.start()
 
@@ -57,6 +71,16 @@ def _run_pipeline() -> None:
         pipeline.main()
     except Exception:
         logger.exception("Pipeline run failed")
+
+
+def _run_daily_report() -> None:
+    """Generate and send daily reports via Feishu webhook."""
+    try:
+        from reporters.daily_report import generate_and_send_all_reports
+        sent = generate_and_send_all_reports()
+        logger.info("Daily report job done: %d/3 reports sent.", sent)
+    except Exception:
+        logger.exception("Daily report job failed")
 
 
 def _simple_loop() -> None:

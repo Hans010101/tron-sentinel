@@ -68,7 +68,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 13         # update when adding / removing pipeline steps
+_TOTAL_STEPS = 14         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -226,6 +226,17 @@ def do_analyze_sentiment() -> int:
         return analyze_sentiment(conn)
     finally:
         conn.close()
+
+
+def do_send_daily_reports() -> int:
+    """Generate and send daily reports via Feishu webhook → returns count sent."""
+    import os  # noqa: PLC0415
+    webhook_url = os.environ.get("FEISHU_WEBHOOK_URL", "").strip()
+    if not webhook_url:
+        logger.info("FEISHU_WEBHOOK_URL not set – skipping daily reports.")
+        return 0
+    from reporters.daily_report import generate_and_send_all_reports  # noqa: PLC0415
+    return generate_and_send_all_reports(webhook_url)
 
 
 # ── Dashboard JSON builder ─────────────────────────────────────────────────────
@@ -620,6 +631,13 @@ def main() -> None:
     step_ok["sentiment"] = ok
     if ok:
         print(f"     已分析   : {val} 条")
+
+    # ── Step 14: Daily Reports (Feishu Webhook) ───────────────────────────
+    val, ok = run_step(14, "生成并发送日报（飞书 Webhook）",
+                       do_send_daily_reports)
+    step_ok["daily_reports"] = ok
+    if ok:
+        print(f"     已发送   : {val}/3 份日报")
 
     # ── Dashboard JSON ─────────────────────────────────────────────────────────
     print(f"\n{_SEP}")
