@@ -12,7 +12,7 @@ python-multipart==0.0.20
 feedparser==6.0.11          # RSS/Atom feed parsing
 httpx==0.28.1               # Async HTTP client (news, on-chain APIs)
 # Apify data collection uses stdlib urllib (no extra dependency needed)
-# APIFY_TOKEN env var required for Twitter/X and Google Search scraping
+# APIFY_API_TOKEN env var required for Twitter/X and Google Search scraping
 
 # --- AI / NLP Analysis ---
 anthropic==0.45.0           # Claude LLM API
