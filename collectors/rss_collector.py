@@ -26,9 +26,65 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DB_PATH = Path(__file__).parent.parent / "data" / "sentinel.db"
+DB_PATH     = Path(__file__).parent.parent / "data" / "sentinel.db"
+_YAML_PATH  = Path(__file__).parent.parent / "config" / "rss_sources.yaml"
 
-FEEDS: list[dict] = [
+# ── YAML loader ────────────────────────────────────────────────────────────────
+
+def _load_feeds_from_yaml(yaml_path: Path) -> list[dict] | None:
+    """
+    Load RSS source definitions from *yaml_path*.
+
+    Returns a list of feed dicts (with ``source``, ``url``, ``language`` keys)
+    for all entries where ``enabled: true``, or *None* if the file cannot be
+    read / parsed so that the caller can fall back to the hardcoded list.
+    """
+    try:
+        import yaml  # pyyaml – already in requirements.txt
+    except ImportError:
+        logger.warning("pyyaml not installed – using hardcoded feed list.")
+        return None
+
+    try:
+        with yaml_path.open(encoding="utf-8") as fh:
+            config = yaml.safe_load(fh)
+    except (OSError, Exception) as exc:
+        logger.warning("Cannot read %s: %s – using hardcoded feed list.", yaml_path, exc)
+        return None
+
+    if not isinstance(config, dict) or "sources" not in config:
+        logger.warning("Unexpected YAML structure in %s – using hardcoded feed list.", yaml_path)
+        return None
+
+    feeds: list[dict] = []
+    for entry in config.get("sources", []):
+        if not isinstance(entry, dict):
+            continue
+        if not entry.get("enabled", True):
+            logger.debug("RSS source disabled: %s", entry.get("name", "?"))
+            continue
+        name = entry.get("name") or entry.get("source")
+        url  = entry.get("url")
+        if not name or not url:
+            logger.warning("RSS source entry missing name/url – skipping: %s", entry)
+            continue
+        feeds.append({
+            "source":   name,
+            "url":      url,
+            "language": entry.get("language", "en"),
+            "category": entry.get("category", ""),
+        })
+
+    logger.info(
+        "Loaded %d RSS source(s) from %s (YAML)", len(feeds), yaml_path.name
+    )
+    return feeds
+
+
+# ── Hardcoded fallback feed list ───────────────────────────────────────────────
+# Used automatically when config/rss_sources.yaml is absent or unreadable.
+
+_FEEDS_HARDCODED: list[dict] = [
     # ── English crypto media ──────────────────────────────────────────────────
     {
         "source":   "CoinDesk",
@@ -316,26 +372,53 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
 
 # ── Collection orchestration ───────────────────────────────────────────────────
 
+def _get_active_feeds() -> list[dict]:
+    """
+    Return the list of feed configurations to collect.
+
+    Tries to load from ``config/rss_sources.yaml`` first; falls back to the
+    hardcoded ``_FEEDS_HARDCODED`` list when the file is absent or unreadable.
+    """
+    if _YAML_PATH.exists():
+        feeds = _load_feeds_from_yaml(_YAML_PATH)
+        if feeds is not None:
+            return feeds
+    logger.info("Falling back to hardcoded RSS feed list (%d sources).", len(_FEEDS_HARDCODED))
+    return _FEEDS_HARDCODED
+
+
 def collect_all(conn: sqlite3.Connection) -> int:
     """
-    Iterate every configured feed, insert new articles, and return the total
+    Iterate every active feed, insert new articles, and return the total
     count of rows actually inserted (duplicates are silently skipped).
+
+    Active feeds are loaded from ``config/rss_sources.yaml`` when available;
+    the hardcoded ``_FEEDS_HARDCODED`` list is used as a fallback.
     """
+    feeds = _get_active_feeds()
     total_new = 0
     cur = conn.cursor()
 
-    for feed_cfg in FEEDS:
+    for feed_cfg in feeds:
         source = feed_cfg["source"]
         new_in_feed = 0
+        fetch_error: str | None = None
         try:
             for article in fetch_feed(feed_cfg):
                 cur.execute(_INSERT, article)
                 new_in_feed += cur.rowcount   # 1 if inserted, 0 if duplicate
             conn.commit()
             logger.info("[%s] Inserted %d new article(s)", source, new_in_feed)
+            print(f"  [{source}]  成功 {new_in_feed} 条")
         except sqlite3.Error as exc:
             conn.rollback()
+            fetch_error = str(exc)
             logger.error("[%s] DB error, rolled back: %s", source, exc)
+            print(f"  [{source}]  数据库错误: {exc}")
+        except Exception as exc:
+            fetch_error = str(exc)
+            logger.error("[%s] Unexpected error: %s", source, exc)
+            print(f"  [{source}]  失败: {exc}")
 
         total_new += new_in_feed
 
