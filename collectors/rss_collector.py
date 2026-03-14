@@ -394,7 +394,7 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
         return
 
     now_utc    = datetime.now(tz=timezone.utc)
-    cutoff_15d = now_utc - timedelta(days=15)
+    cutoff_30d = now_utc - timedelta(days=30)
     now_utc_s  = now_utc.isoformat()
 
     for entry in parsed.get("entries", []):
@@ -417,7 +417,7 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
                 pub_dt = datetime.fromisoformat(published_at)
                 if pub_dt.tzinfo is None:
                     pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                if pub_dt < cutoff_15d:
+                if pub_dt < cutoff_30d:
                     continue
             except Exception:
                 pass

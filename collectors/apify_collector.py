@@ -202,7 +202,7 @@ def collect_twitter(conn: sqlite3.Connection, token: str | None = None) -> int:
 
     _now = datetime.now(tz=timezone.utc)
     now_utc = _now.isoformat()
-    _cutoff = _now - timedelta(days=15)
+    _cutoff = _now - timedelta(days=30)
     inserted = 0
     cur = conn.cursor()
 
@@ -327,7 +327,7 @@ def collect_google_news(conn: sqlite3.Connection,
 
     _now = datetime.now(tz=timezone.utc)
     now_utc = _now.isoformat()
-    _cutoff = _now - timedelta(days=15)
+    _cutoff = _now - timedelta(days=30)
     inserted = 0
     cur = conn.cursor()
 
@@ -402,7 +402,7 @@ def collect_youtube(conn: sqlite3.Connection, token: str | None = None) -> int:
 
     _now = datetime.now(tz=timezone.utc)
     now_utc = _now.isoformat()
-    _cutoff = _now - timedelta(days=15)
+    _cutoff = _now - timedelta(days=30)
     inserted = 0
     cur = conn.cursor()
 
@@ -465,7 +465,7 @@ def collect_reddit(conn: sqlite3.Connection, token: str | None = None) -> int:
     token = token or _get_token()
     _now = datetime.now(tz=timezone.utc)
     now_utc = _now.isoformat()
-    _cutoff = _now - timedelta(days=15)
+    _cutoff = _now - timedelta(days=30)
     inserted = 0
     cur = conn.cursor()
 
@@ -561,7 +561,7 @@ def collect_tiktok(conn: sqlite3.Connection, token: str | None = None) -> int:
 
     _now = datetime.now(tz=timezone.utc)
     now_utc = _now.isoformat()
-    _cutoff = _now - timedelta(days=15)
+    _cutoff = _now - timedelta(days=30)
     inserted = 0
     cur = conn.cursor()
 
@@ -657,7 +657,7 @@ def collect_weibo(conn: sqlite3.Connection, token: str | None = None) -> int:
 
     _now = datetime.now(tz=timezone.utc)
     now_utc = _now.isoformat()
-    _cutoff = _now - timedelta(days=15)
+    _cutoff = _now - timedelta(days=30)
     inserted = 0
     cur = conn.cursor()
 
