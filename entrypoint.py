@@ -183,13 +183,33 @@ def _run_scheduler() -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 
+def _sync_db_from_gcs() -> None:
+    """If GCS_BUCKET is configured, pull the latest DB before serving traffic."""
+    bucket = os.environ.get("GCS_BUCKET", "").strip()
+    if not bucket:
+        return
+    try:
+        sys.path.insert(0, str(Path(__file__).parent))
+        from utils.gcs_storage import download_db  # noqa: PLC0415
+        db_path = Path(__file__).parent / "data" / "sentinel.db"
+        ok = download_db(bucket, db_path)
+        if ok:
+            logger.info("Startup GCS sync: DB downloaded from gs://%s/data/sentinel.db", bucket)
+        else:
+            logger.info("Startup GCS sync: no existing DB in GCS, will create fresh")
+    except Exception as exc:
+        logger.warning("Startup GCS sync failed: %s", exc)
+
+
 def main() -> None:
+    _sync_db_from_gcs()
+
     t = threading.Thread(target=_run_scheduler, name="scheduler", daemon=True)
     t.start()
 
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), _Handler)
-    logger.info("Serving on 0.0.0.0:%d  (health + /data.json)", port)
+    logger.info("Serving on 0.0.0.0:%d  (health + /data.json + /diagnose)", port)
     try:
         server.serve_forever()
     except (KeyboardInterrupt, SystemExit):

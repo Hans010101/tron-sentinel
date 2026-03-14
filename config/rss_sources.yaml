@@ -141,7 +141,7 @@ sources:
     url:      https://messari.io/rss/news.xml
     language: en
     category: 加密媒体
-    enabled:  true
+    enabled:  false              # 被限流，已禁用
 
   - name:     Chainalysis_Blog
     url:      https://blog.chainalysis.com/feed/
@@ -157,16 +157,16 @@ sources:
 
   # ── Chinese crypto media ─────────────────────────────────────────────────────
   - name:     JinSeCaiJing
-    url:      https://www.jinse.cn/rss
+    url:      https://www.jinse.cn/lives/rss
     language: zh
     category: 中文加密媒体
     enabled:  true
 
   - name:     BlockBeats
-    url:      https://www.theblockbeats.info/rss
+    url:      https://api.theblockbeats.news/v1/open-api/open-flash?size=20
     language: zh
     category: 中文加密媒体
-    enabled:  true
+    enabled:  false              # 非标准RSS，已禁用
 
   - name:     PANews
     url:      https://www.panewslab.com/rss/zh/index.xml
@@ -175,7 +175,7 @@ sources:
     enabled:  true
 
   - name:     ShenChaoTechFlow
-    url:      https://www.techflowpost.com/rss
+    url:      https://www.techflowpost.com/rss/index.xml
     language: zh
     category: 中文加密媒体
     enabled:  true
@@ -190,7 +190,7 @@ sources:
     url:      https://www.chaincatcher.com/rss
     language: zh
     category: 中文加密媒体
-    enabled:  true
+    enabled:  false              # 无标准RSS源，已禁用
 
   # ── Mainstream media via Google News ────────────────────────────────────────
   - name:     Reuters_Crypto
@@ -258,23 +258,23 @@ sources:
     url:      https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw
     language: en
     category: YouTube
-    enabled:  true
+    enabled:  false              # YouTube限流429，已禁用
 
   - name:     CryptosRUs_YouTube
     url:      https://www.youtube.com/feeds/videos.xml?channel_id=UCYkXBMwBErddjfJ2ATgaxmQ
     language: en
     category: YouTube
-    enabled:  true
+    enabled:  false              # YouTube限流429，已禁用
 
   - name:     AltcoinDaily_YouTube
     url:      https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw
     language: en
     category: YouTube
-    enabled:  true
+    enabled:  false              # YouTube限流429，已禁用
 
   - name:     TRONDAO_YouTube
     url:      https://www.youtube.com/feeds/videos.xml?channel_id=UC5OPOGRq02iK-0T9sKSe-kQ
     language: en
     category: YouTube
-    enabled:  true
+    enabled:  false              # YouTube限流429，已禁用
     skip_relevance_check: true

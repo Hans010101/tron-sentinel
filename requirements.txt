@@ -20,6 +20,9 @@ transformers==4.49.0        # HuggingFace models (sentiment)
 torch==2.6.0                # PyTorch backend for transformers
 sentencepiece==0.2.0        # Tokenizer dependency
 
+# --- Cloud Storage ---
+google-cloud-storage==2.19.0  # GCS DB persistence for Cloud Run (utils/gcs_storage.py)
+
 # --- Database ---
 sqlalchemy==2.0.37          # ORM
 asyncpg==0.30.0             # Async PostgreSQL driver

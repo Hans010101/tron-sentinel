@@ -794,6 +794,19 @@ def main() -> None:
     print(f"  {datetime.now().strftime('%Y-%m-%d  %H:%M:%S')}")
     print(_SEP2)
 
+    # ── GCS DB sync: download before pipeline ──────────────────────────────────
+    _gcs_bucket = os.environ.get("GCS_BUCKET", "").strip()
+    if _gcs_bucket:
+        print(f"\n{_SEP}")
+        print("  [GCS]  从 Cloud Storage 下载最新数据库…")
+        print(_SEP)
+        from utils.gcs_storage import download_db  # noqa: PLC0415
+        _downloaded = download_db(_gcs_bucket, DB_PATH)
+        if _downloaded:
+            print(f"  ✓  数据库已同步 (gs://{_gcs_bucket}/data/sentinel.db)")
+        else:
+            print("  –  GCS 无历史数据库，使用本地（或新建）")
+
     step_ok: dict[str, bool] = {}
 
     # ── Step 1: RSS collection ─────────────────────────────────────────────────
@@ -1015,6 +1028,19 @@ def main() -> None:
         print(f"     cd {ROOT.resolve()}")
         print(f"     python -m http.server 8080")
         print(f"     → 浏览器访问 http://localhost:8080/dashboard/")
+
+    # ── GCS DB sync: upload after pipeline ─────────────────────────────────────
+    if _gcs_bucket:
+        print(f"\n{_SEP}")
+        print("  [GCS]  上传数据库到 Cloud Storage…")
+        print(_SEP)
+        from utils.gcs_storage import upload_db  # noqa: PLC0415
+        _uploaded = upload_db(_gcs_bucket, DB_PATH)
+        if _uploaded:
+            print(f"  ✓  数据库已上传 (gs://{_gcs_bucket}/data/sentinel.db)")
+        else:
+            print("  ✗  数据库上传失败（详见日志）")
+
     print()
 
 
