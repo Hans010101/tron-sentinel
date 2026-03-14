@@ -1,0 +1,59 @@
+# TRON Sentinel – 关键词配置
+# ──────────────────────────────────────────────────────────────────────────────
+# 修改此文件无需改代码，重启采集即可生效。
+#
+# primary_keywords   – 核心关键词：标题含有任一词才被采集（不区分大小写）
+# secondary_keywords – 次要关键词：用于相关性增强（如风险评分加权）
+# noise_filters      – 噪音过滤：标题含有任一词则丢弃（优先于 primary_keywords）
+
+primary_keywords:
+  # 项目名称
+  - TRON
+  - TRX
+  - 波场
+  # 创始人
+  - Justin Sun
+  - 孙宇晨
+  - Sun Yuchen
+  # 主要产品与协议
+  - USDD
+  - SunPump
+  - BitTorrent
+  - BTT
+  - TRON Foundation
+  - TRON Network
+  - JustLend
+  - SunSwap
+
+secondary_keywords:
+  # 关联实体
+  - HTX
+  - Poloniex
+  - HuobiToken
+  - tronics
+  # 链上生态
+  - TRC20
+  - TRC10
+  - TRON DeFi
+  - TRON TVL
+  - TRON stablecoin
+  - WINkLink
+  - JUST
+
+noise_filters:
+  # 价格噪音
+  - price prediction
+  - price today
+  - price analysis
+  - price forecast
+  - live price
+  - to usd
+  - marketcap and
+  # 商业噪音
+  - buy now
+  - sponsored
+  - advertisement
+  - affiliate
+  - promotion
+  - discount
+  - coupon

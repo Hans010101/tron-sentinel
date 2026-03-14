@@ -22,6 +22,7 @@ Executes in order:
     Step 16  Instant Alerts          alerting/instant_alert.py
     Step 17  Trend Analysis          analyzers/trend_analyzer.py
     Step 18  Daily Reports           reporters/daily_report.py
+    Step 19  Data Cleanup            (inline – SQLite VACUUM)
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -73,7 +74,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 18         # update when adding / removing pipeline steps
+_TOTAL_STEPS = 19         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -274,6 +275,65 @@ def do_send_daily_reports() -> int:
         return 0
     from reporters.daily_report import generate_and_send_all_reports  # noqa: PLC0415
     return generate_and_send_all_reports(webhook_url)
+
+
+def do_cleanup_db(retention_days: int = 30) -> dict:
+    """
+    Remove records older than *retention_days* from raw_articles and trend_data,
+    then VACUUM the SQLite file to reclaim disk space.
+
+    Returns a dict with deletion counts and size saved.
+    """
+    if not DB_PATH.exists():
+        return {"skipped": True, "reason": "Database not found"}
+
+    size_before = DB_PATH.stat().st_size
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=retention_days)
+        ).date().isoformat()
+
+        # Count rows to be deleted (for reporting)
+        articles_del = conn.execute(
+            "SELECT COUNT(*) FROM raw_articles WHERE collected_at < ?",
+            (cutoff,),
+        ).fetchone()[0]
+
+        trend_del = 0
+        try:
+            trend_del = conn.execute(
+                "SELECT COUNT(*) FROM trend_data WHERE date < ?",
+                (cutoff,),
+            ).fetchone()[0]
+        except sqlite3.OperationalError:
+            pass  # trend_data may not exist yet
+
+        print(f"     将删除 raw_articles : {articles_del} 条（>{retention_days}天）")
+        print(f"     将删除 trend_data   : {trend_del} 条（>{retention_days}天）")
+
+        conn.execute(
+            "DELETE FROM raw_articles WHERE collected_at < ?", (cutoff,)
+        )
+        try:
+            conn.execute("DELETE FROM trend_data WHERE date < ?", (cutoff,))
+        except sqlite3.OperationalError:
+            pass
+        conn.commit()
+        conn.execute("VACUUM")
+        conn.commit()
+    finally:
+        conn.close()
+
+    size_after  = DB_PATH.stat().st_size
+    saved_mb    = round((size_before - size_after) / 1_048_576, 2)
+    return {
+        "articles_deleted": articles_del,
+        "trend_deleted":    trend_del,
+        "db_size_mb_before": round(size_before / 1_048_576, 2),
+        "db_size_mb_after":  round(size_after  / 1_048_576, 2),
+        "saved_mb":          saved_mb,
+    }
 
 
 # ── Dashboard JSON builder ─────────────────────────────────────────────────────
@@ -857,6 +917,16 @@ def main() -> None:
     step_ok["daily_reports"] = ok
     if ok:
         print(f"     已发送   : {val}/3 份日报")
+
+    # ── Step 19: Data Cleanup ──────────────────────────────────────────────
+    val, ok = run_step(19, "数据清理（删除30天前记录 + VACUUM 压缩）",
+                       do_cleanup_db)
+    step_ok["cleanup"] = ok
+    if ok and isinstance(val, dict) and not val.get("skipped"):
+        print(f"     已删除   : raw_articles {val['articles_deleted']} 条"
+              f"  trend_data {val['trend_deleted']} 条")
+        print(f"     数据库   : {val['db_size_mb_before']} MB → "
+              f"{val['db_size_mb_after']} MB  (节省 {val['saved_mb']} MB)")
 
     # ── Dashboard JSON ─────────────────────────────────────────────────────────
     print(f"\n{_SEP}")

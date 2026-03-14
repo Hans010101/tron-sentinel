@@ -3,9 +3,10 @@ entrypoint.py
 ~~~~~~~~~~~~~
 Cloud Run entry point for TRON Sentinel.
 
-Serves two HTTP routes on $PORT (default 8080):
-    GET /health      → 200 "OK"  (Cloud Run liveness probe)
-    GET /data.json   → 200 JSON  (latest dashboard data)
+Serves HTTP routes on $PORT (default 8080):
+    GET /health      → 200 JSON  health report (scripts/health_check.py)
+    GET /            → 200 HTML  dashboard (dashboard/index.html)
+    GET /data.json   → 200 JSON  latest dashboard data
                        Triggers a pipeline run on first request if
                        dashboard/data.json does not yet exist.
 
@@ -41,13 +42,35 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = self.path.split("?")[0].rstrip("/") or "/"
         if path == "/health":
-            self._send(200, b"OK", "text/plain; charset=utf-8")
+            self._serve_health()
         elif path == "/":
             self._serve_index()
         elif path == "/data.json":
             self._serve_data_json()
         else:
             self._send(404, b"Not Found", "text/plain; charset=utf-8")
+
+    # ------------------------------------------------------------------
+
+    def _serve_health(self) -> None:
+        """Return a JSON health report from scripts/health_check.py."""
+        import json  # noqa: PLC0415
+        try:
+            sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+            from health_check import run_health_check  # noqa: PLC0415
+            report = run_health_check()
+            body   = json.dumps(report, ensure_ascii=False).encode("utf-8")
+            status = 200 if report.get("status") in ("healthy", "degraded") else 503
+        except Exception as exc:
+            logger.warning("Health check failed: %s", exc)
+            body   = json.dumps({"status": "critical", "error": str(exc)}).encode("utf-8")
+            status = 503
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
 
     # ------------------------------------------------------------------
 

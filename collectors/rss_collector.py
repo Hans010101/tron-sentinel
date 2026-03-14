@@ -26,8 +26,9 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-DB_PATH     = Path(__file__).parent.parent / "data" / "sentinel.db"
-_YAML_PATH  = Path(__file__).parent.parent / "config" / "rss_sources.yaml"
+DB_PATH          = Path(__file__).parent.parent / "data" / "sentinel.db"
+_YAML_PATH       = Path(__file__).parent.parent / "config" / "rss_sources.yaml"
+_KEYWORDS_PATH   = Path(__file__).parent.parent / "config" / "keywords.yaml"
 
 # ── YAML loader ────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,66 @@ def _load_feeds_from_yaml(yaml_path: Path) -> list[dict] | None:
         "Loaded %d RSS source(s) from %s (YAML)", len(feeds), yaml_path.name
     )
     return feeds
+
+
+# ── Keyword YAML loader ────────────────────────────────────────────────────────
+
+def _load_keywords_from_yaml(yaml_path: Path) -> dict | None:
+    """
+    Load keyword lists from *yaml_path* (config/keywords.yaml).
+
+    Returns a dict with keys ``primary_keywords``, ``secondary_keywords``,
+    and ``noise_filters`` (all lists of lowercase strings), or *None* on
+    failure so the caller can fall back to the hardcoded constants.
+    """
+    try:
+        import yaml
+    except ImportError:
+        return None
+    try:
+        with yaml_path.open(encoding="utf-8") as fh:
+            config = yaml.safe_load(fh)
+    except (OSError, Exception):
+        return None
+    if not isinstance(config, dict):
+        return None
+    return {
+        "primary_keywords":   [str(k).lower() for k in config.get("primary_keywords",   [])],
+        "secondary_keywords": [str(k).lower() for k in config.get("secondary_keywords", [])],
+        "noise_filters":      [str(k).lower() for k in config.get("noise_filters",      [])],
+    }
+
+
+# ── Keyword sets (loaded at import time, fall back to hardcoded if needed) ─────
+
+_HARDCODED_RELEVANCE_KEYWORDS: tuple[str, ...] = (
+    "tron", "trx", "justin sun", "孙宇晨", "波场",
+    "sun yuchen", "usdd", "bittorrent", "sunpump", "tron foundation",
+    "tron network",
+)
+
+_HARDCODED_NOISE_PATTERNS: tuple[str, ...] = (
+    "price today", "live price", "price prediction", "to usd",
+    "marketcap and", "price analysis", "price forecast",
+)
+
+def _build_keyword_sets() -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return (relevance_keywords, noise_patterns) from YAML or hardcoded fallback."""
+    if _KEYWORDS_PATH.exists():
+        kw = _load_keywords_from_yaml(_KEYWORDS_PATH)
+        if kw is not None:
+            primary = tuple(kw["primary_keywords"])
+            noise   = tuple(kw["noise_filters"])
+            if primary:
+                logger.debug(
+                    "Keywords loaded from %s (%d primary, %d noise)",
+                    _KEYWORDS_PATH.name, len(primary), len(noise),
+                )
+                return primary, noise
+    return _HARDCODED_RELEVANCE_KEYWORDS, _HARDCODED_NOISE_PATTERNS
+
+
+_RELEVANCE_KEYWORDS, _NOISE_TITLE_PATTERNS = _build_keyword_sets()
 
 
 # ── Hardcoded fallback feed list ───────────────────────────────────────────────
@@ -208,21 +269,9 @@ _FEEDS_HARDCODED: list[dict] = [
 
 _SUMMARY_MAX_LEN = 500
 
-# ── Relevance filter ──────────────────────────────────────────────────────
-# Only keep articles whose title mentions TRON-related keywords, to avoid
-# ingesting unrelated general crypto news from broad feeds.
-
-_RELEVANCE_KEYWORDS = (
-    "tron", "trx", "justin sun", "孙宇晨", "波场",
-    "sun yuchen", "usdd", "bittorrent", "sunpump", "tron foundation",
-    "tron network",
-)
-
-_NOISE_TITLE_PATTERNS = (
-    "price today", "live price", "price prediction", "to usd",
-    "marketcap and", "price analysis", "price forecast",
-)
-
+# _RELEVANCE_KEYWORDS and _NOISE_TITLE_PATTERNS are now set dynamically
+# by _build_keyword_sets() above (loaded from config/keywords.yaml with
+# hardcoded fallback).
 
 def _is_relevant(title: str) -> bool:
     """Return True if the title is relevant to TRON/Justin Sun and not noise."""
