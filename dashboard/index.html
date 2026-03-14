@@ -478,35 +478,7 @@
     }
     canvas.trend-canvas { display: block; width: 100%; height: 220px; }
 
-    /* HOT KEYWORDS */
-    .kw-list {
-      display: flex; flex-direction: column; gap: 5px;
-    }
-    .kw-row {
-      display: flex; align-items: center; gap: 8px;
-    }
-    .kw-rank {
-      font-size: 11px; font-weight: 700;
-      min-width: 22px; text-align: right;
-      color: var(--text-3);
-    }
-    .kw-rank.top3 { color: var(--primary); }
-    .kw-word {
-      font-size: 13px; font-weight: 600; color: var(--text-1);
-      min-width: 90px;
-    }
-    .kw-track {
-      flex: 1; height: 12px; background: var(--bg);
-      border-radius: 6px; overflow: hidden;
-    }
-    .kw-fill {
-      height: 100%; border-radius: 6px;
-      background: var(--primary);
-      transition: width 0.4s ease;
-    }
-    .kw-count {
-      font-size: 11px; color: var(--text-3); min-width: 28px;
-    }
+    /* HOT KEYWORDS - removed */
 
     /* PAGINATION */
     .pagination {
@@ -592,17 +564,17 @@
     <div class="stat-card c-green">
       <div class="stat-label">正面占比</div>
       <div class="stat-value c-green" id="stat-pos">--</div>
-      <div class="stat-hint">过去 15 天</div>
+      <div class="stat-hint">过去 30 天</div>
     </div>
     <div class="stat-card c-red">
       <div class="stat-label">负面占比</div>
       <div class="stat-value c-red" id="stat-neg">--</div>
-      <div class="stat-hint">过去 15 天</div>
+      <div class="stat-hint">过去 30 天</div>
     </div>
     <div class="stat-card c-orange">
       <div class="stat-label">中性占比</div>
       <div class="stat-value c-orange" id="stat-neu">--</div>
-      <div class="stat-hint">过去 15 天</div>
+      <div class="stat-hint">过去 30 天</div>
     </div>
     <div class="stat-card c-blue">
       <div class="stat-label">活跃预警</div>
@@ -661,7 +633,7 @@
     <canvas id="sentimentChart" style="width:100%;height:240px"></canvas>
   </div>
 
-  <!-- 5. ANOMALY + 7-DAY TRENDS + HOT KEYWORDS -->
+  <!-- 5. ANOMALY + 30-DAY TRENDS -->
   <div id="anomalySection" style="display:none">
     <div class="section-label">异常检测</div>
     <div class="card" style="border-color:var(--red)">
@@ -669,19 +641,19 @@
         <div class="card-title" style="color:var(--red)">趋势异常预警</div>
         <span class="badge" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,0.3)">实时</span>
       </div>
-      <div class="card-sub">基于过去7天基准线的声量和情感异常检测</div>
+      <div class="card-sub">基于过去30天基准线的声量和情感异常检测</div>
       <div class="anomaly-bar" id="anomalyBar"></div>
     </div>
   </div>
 
-  <div class="section-label">7天趋势</div>
+  <div class="section-label">30天趋势</div>
   <div class="trend-grid">
     <div class="card">
       <div class="card-head">
-        <div class="card-title">声量趋势（7天）</div>
-        <span class="badge badge-live">7D</span>
+        <div class="card-title">声量趋势（30天）</div>
+        <span class="badge badge-live">30D</span>
       </div>
-      <div class="card-sub">过去7天每日文章总数</div>
+      <div class="card-sub">过去30天每日文章总数</div>
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-swatch" style="background:var(--primary)"></div>日声量</div>
       </div>
@@ -689,10 +661,10 @@
     </div>
     <div class="card">
       <div class="card-head">
-        <div class="card-title">情感趋势（7天）</div>
-        <span class="badge badge-live">7D</span>
+        <div class="card-title">情感趋势（30天）</div>
+        <span class="badge badge-live">30D</span>
       </div>
-      <div class="card-sub">过去7天每日正面 / 中性 / 负面文章数</div>
+      <div class="card-sub">过去30天每日正面 / 中性 / 负面文章数</div>
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
         <div class="legend-item"><div class="legend-swatch" style="background:var(--yellow)"></div>中性</div>
@@ -702,15 +674,6 @@
     </div>
   </div>
 
-  <div class="section-label">热词排行</div>
-  <div class="card">
-    <div class="card-head">
-      <div class="card-title">最近24小时热词 Top 20</div>
-      <span class="badge badge-live">24H</span>
-    </div>
-    <div class="card-sub">从最近24小时文章标题中提取的高频关键词（已去除停用词）</div>
-    <div class="kw-list" id="hotKeywords"></div>
-  </div>
 
   <!-- 6. NEWS LIST -->
   <div class="section-label" id="newsSection">最新动态</div>
@@ -719,7 +682,7 @@
       <div class="card-title">新闻 / 推文</div>
       <span class="badge badge-live">实时</span>
     </div>
-    <div class="card-sub">最近 15 天 TRON / Justin Sun 相关内容（点击跳转原文）</div>
+    <div class="card-sub">最近 30 天 TRON / Justin Sun 相关内容（点击跳转原文）</div>
     <div class="news-controls">
       <select id="filterSector" title="按板块筛选">
         <option value="">全部板块</option>
@@ -745,7 +708,7 @@
       <div class="card-title" style="color:var(--red)">实时风险预警</div>
       <span class="badge" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,0.3)" id="badge-risk">-- 条</span>
     </div>
-    <div class="card-sub">风险分数 ≥60 的内容（最近 15 天，越高越危险）</div>
+    <div class="card-sub">风险分数 ≥60 的内容（最近 30 天，越高越危险）</div>
     <div id="riskList"></div>
     <div class="pagination" id="riskPagination">
       <button id="riskPrev" onclick="changeRiskPage(-1)">&#8249; 上一页</button>
@@ -949,20 +912,20 @@ function updateOverview() {
   if ($('stat-alerts')) $('stat-alerts').textContent = o.active_alerts ?? 0;
 }
 
-/* ── 15-DAY FRESHNESS FILTER ────────────────────────────── */
+/* ── 30-DAY FRESHNESS FILTER ────────────────────────────── */
 
-const _FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+const _THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-function _isWithin15Days(item) {
+function _isWithin30Days(item) {
   if (item.published_at) {
     try {
       const dt = new Date(item.published_at);
-      if (!isNaN(dt)) return (Date.now() - dt.getTime()) <= _FIFTEEN_DAYS_MS;
+      if (!isNaN(dt)) return (Date.now() - dt.getTime()) <= _THIRTY_DAYS_MS;
     } catch (e) { /* fall through */ }
   }
   if (item.time_ago) {
     const m = item.time_ago.match(/(\d+)\s*d/i);
-    if (m) return parseInt(m[1], 10) <= 15;
+    if (m) return parseInt(m[1], 10) <= 30;
     if (/\d+\s*(h|m)/i.test(item.time_ago)) return true;
   }
   return true;
@@ -1058,7 +1021,7 @@ function _renderRiskPage() {
 
 function renderRiskPanel() {
   const badge = document.getElementById('badge-risk');
-  _riskItems = (DATA.risk_alerts || []).filter(_isWithin15Days);
+  _riskItems = (DATA.risk_alerts || []).filter(_isWithin30Days);
   if (badge) badge.textContent = _riskItems.length + ' \u6761';
 
   const panel = document.getElementById('riskPanel');
@@ -1209,8 +1172,8 @@ function renderNews() {
   // Use risk_alerts as the main news source (richer data), fall back to alerts
   let items = (DATA.risk_alerts && DATA.risk_alerts.length) ? [...DATA.risk_alerts] : [...(DATA.alerts || [])];
 
-  // 15-day freshness filter
-  items = items.filter(_isWithin15Days);
+  // 30-day freshness filter
+  items = items.filter(_isWithin30Days);
 
   // Sector filter
   if (_currentSectorFilter) {
@@ -1534,30 +1497,6 @@ function drawSentimentTrendChart() {
   drawLine7('positive', '#16a34a', 'rgba(22,163,74,0.13)');
 }
 
-/* ── HOT KEYWORDS ───────────────────────────────────────── */
-
-function renderHotKeywords() {
-  const el = document.getElementById('hotKeywords');
-  if (!el) return;
-  const keywords = ((DATA.trends || {}).hot_keywords) || [];
-  if (!keywords.length) {
-    el.innerHTML = '<p style="color:var(--text-3);font-size:12px">暂无热词数据</p>';
-    return;
-  }
-  const maxCount = Math.max(1, ...keywords.map(k => k.count));
-  const colors   = ['#C23631','#6366f1','#2563eb','#ea580c','#16a34a'];
-  el.innerHTML = keywords.slice(0, 20).map((k, i) => {
-    const pct  = ((k.count / maxCount) * 100).toFixed(0);
-    const color= colors[i % colors.length];
-    const topCls = i < 3 ? 'kw-rank top3' : 'kw-rank';
-    return `<div class="kw-row">
-      <div class="${topCls}">#${i+1}</div>
-      <div class="kw-word">${_esc(k.word)}</div>
-      <div class="kw-track"><div class="kw-fill" style="width:${pct}%;background:${color}"></div></div>
-      <div class="kw-count">${k.count}</div>
-    </div>`;
-  }).join('');
-}
 
 /* ── INIT ───────────────────────────────────────────────── */
 
@@ -1573,7 +1512,6 @@ function renderAll_inner() {
   drawSentimentChart();
   drawVolumeTrendChart();
   drawSentimentTrendChart();
-  renderHotKeywords();
 }
 
 async function renderAll() {

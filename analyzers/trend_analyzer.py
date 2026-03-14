@@ -3,9 +3,9 @@ analyzers/trend_analyzer.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Trend analysis for TRON Sentinel.
 
-Analyzes 7-day sentiment and volume trends, extracts hot keywords from
-the last 24 hours, detects volume/sentiment anomalies, and writes all
-results to the ``trend_data`` table in the SQLite database.
+Analyzes 30-day sentiment and volume trends, detects volume/sentiment
+anomalies, and writes all results to the ``trend_data`` table in the
+SQLite database.
 
 Usage:
     from analyzers.trend_analyzer import analyze_trends
@@ -111,14 +111,14 @@ def _extract_keywords(titles: list[str]) -> list[dict]:
 
 def analyze_trends(db_path) -> dict:
     """
-    Analyze 7-day sentiment & volume trends.
+    Analyze 30-day sentiment & volume trends.
 
     Returns a dict with keys:
-        daily_volume      list[{date, count}]          – 7 days, oldest first
-        daily_sentiment   list[{date, pos, neu, neg}]  – 7 days, oldest first
+        daily_volume      list[{date, count}]          – 30 days, oldest first
+        daily_sentiment   list[{date, pos, neu, neg}]  – 30 days, oldest first
         hot_keywords      list[{word, count}]           – top 20, last 24 h
         anomalies         list[{type, pct, detail}]     – empty if none detected
-        platform_trends   list[{platform, daily, avg_7d}]
+        platform_trends   list[{platform, daily, avg_30d}]
     """
     db_path = Path(db_path)
     conn = sqlite3.connect(db_path)
@@ -127,8 +127,8 @@ def analyze_trends(db_path) -> dict:
 
         now   = datetime.now(timezone.utc)
         today = now.date()
-        # Oldest → newest so charts render left-to-right
-        dates = [(today - timedelta(days=i)) for i in range(6, -1, -1)]
+        # Oldest → newest so charts render left-to-right (30 days)
+        dates = [(today - timedelta(days=i)) for i in range(29, -1, -1)]
 
         # ── Daily volume ──────────────────────────────────────────────────────
         daily_volume: list[dict] = []
@@ -172,43 +172,43 @@ def analyze_trends(db_path) -> dict:
         # ── Anomaly detection ─────────────────────────────────────────────────
         anomalies: list[dict] = []
 
-        # Volume surge: today > 2× past-6-day average
+        # Volume surge: today > 2× past-29-day average
         today_vol     = daily_volume[-1]["count"]
-        past_6_vols   = [d["count"] for d in daily_volume[:-1]]
-        avg_past_6_vol = sum(past_6_vols) / max(len(past_6_vols), 1)
+        past_29_vols   = [d["count"] for d in daily_volume[:-1]]
+        avg_past_29_vol = sum(past_29_vols) / max(len(past_29_vols), 1)
 
-        if avg_past_6_vol > 0 and today_vol > avg_past_6_vol * 2:
-            pct = round((today_vol / avg_past_6_vol - 1) * 100, 1)
+        if avg_past_29_vol > 0 and today_vol > avg_past_29_vol * 2:
+            pct = round((today_vol / avg_past_29_vol - 1) * 100, 1)
             anomalies.append({
                 "type":   "声量激增",
                 "pct":    pct,
                 "detail": (
                     f"今日声量 {today_vol} 条，"
-                    f"超过过去6天均值 {avg_past_6_vol:.0f} 条的 {pct}%"
+                    f"超过过去29天均值 {avg_past_29_vol:.0f} 条的 {pct}%"
                 ),
             })
 
-        # Negative surge: today's negative ratio > 1.5× past-6-day average
+        # Negative surge: today's negative ratio > 1.5× past-29-day average
         today_sent       = daily_sentiment[-1]
         today_sent_total = max(
             today_sent["positive"] + today_sent["neutral"] + today_sent["negative"], 1
         )
         today_neg_ratio  = today_sent["negative"] / today_sent_total
 
-        past_6_neg_ratios = []
+        past_29_neg_ratios = []
         for ds in daily_sentiment[:-1]:
             tot = max(ds["positive"] + ds["neutral"] + ds["negative"], 1)
-            past_6_neg_ratios.append(ds["negative"] / tot)
-        avg_past_6_neg = sum(past_6_neg_ratios) / max(len(past_6_neg_ratios), 1)
+            past_29_neg_ratios.append(ds["negative"] / tot)
+        avg_past_29_neg = sum(past_29_neg_ratios) / max(len(past_29_neg_ratios), 1)
 
-        if avg_past_6_neg > 0 and today_neg_ratio > avg_past_6_neg * 1.5:
-            pct = round((today_neg_ratio / avg_past_6_neg - 1) * 100, 1)
+        if avg_past_29_neg > 0 and today_neg_ratio > avg_past_29_neg * 1.5:
+            pct = round((today_neg_ratio / avg_past_29_neg - 1) * 100, 1)
             anomalies.append({
                 "type":   "负面激增",
                 "pct":    pct,
                 "detail": (
                     f"今日负面比例 {today_neg_ratio:.1%}，"
-                    f"超过过去6天均值 {avg_past_6_neg:.1%} 的 {pct}%"
+                    f"超过过去29天均值 {avg_past_29_neg:.1%} 的 {pct}%"
                 ),
             })
 
@@ -225,11 +225,11 @@ def analyze_trends(db_path) -> dict:
                     sources + [pfx + "%"],
                 ).fetchone()[0]
                 daily_counts.append({"date": pfx, "count": count})
-            total_7d = sum(d["count"] for d in daily_counts)
+            total_30d = sum(d["count"] for d in daily_counts)
             platform_trends.append({
                 "platform": platform_name,
                 "daily":    daily_counts,
-                "avg_7d":   round(total_7d / 7, 1),
+                "avg_30d":   round(total_30d / 30, 1),
             })
 
         # ── Assemble & persist ────────────────────────────────────────────────

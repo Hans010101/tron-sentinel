@@ -118,7 +118,7 @@ def collect_baidu(conn: sqlite3.Connection) -> int:
     """
     now_dt     = datetime.now(tz=timezone.utc)
     now_utc    = now_dt.isoformat()
-    cutoff_15d = now_dt - timedelta(days=15)
+    cutoff_30d = now_dt - timedelta(days=30)
     inserted   = 0
     cur        = conn.cursor()
 
@@ -133,7 +133,7 @@ def collect_baidu(conn: sqlite3.Connection) -> int:
                     pub_dt = datetime.fromisoformat(pub)
                     if pub_dt.tzinfo is None:
                         pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                    if pub_dt < cutoff_15d:
+                    if pub_dt < cutoff_30d:
                         continue
                 except Exception:
                     pass

@@ -90,7 +90,7 @@ def collect_crypto_panic(conn: sqlite3.Connection) -> int:
 
     now_dt     = datetime.now(tz=timezone.utc)
     now_utc    = now_dt.isoformat()
-    cutoff_15d = now_dt - timedelta(days=15)
+    cutoff_30d = now_dt - timedelta(days=30)
     inserted   = 0
     cur        = conn.cursor()
 
@@ -106,7 +106,7 @@ def collect_crypto_panic(conn: sqlite3.Connection) -> int:
         if published:
             try:
                 dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
-                if dt < cutoff_15d:
+                if dt < cutoff_30d:
                     continue
                 published = dt.isoformat()
             except (ValueError, TypeError):

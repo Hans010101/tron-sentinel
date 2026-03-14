@@ -277,7 +277,7 @@ def do_send_daily_reports() -> int:
     return generate_and_send_all_reports(webhook_url)
 
 
-def do_cleanup_db(retention_days: int = 15) -> dict:
+def do_cleanup_db(retention_days: int = 30) -> dict:
     """
     Remove records older than *retention_days* from raw_articles and trend_data,
     then VACUUM the SQLite file to reclaim disk space.
@@ -427,7 +427,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
     now        = datetime.now(timezone.utc)
     today_pfx  = now.strftime("%Y-%m-%d")
     cutoff_24  = (now - timedelta(hours=24)).isoformat()
-    cutoff_15d = (now - timedelta(days=15)).isoformat()
+    cutoff_30d = (now - timedelta(days=30)).isoformat()
 
     # Ensure sentiment columns exist (added by sentiment analyzer when it runs)
     _ensure_sentiment_columns(conn)
@@ -442,7 +442,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "SELECT sentiment_label, COUNT(*) FROM raw_articles "
         "WHERE  sentiment_label IS NOT NULL AND collected_at >= ? "
         "GROUP  BY sentiment_label",
-        (cutoff_15d,),
+        (cutoff_30d,),
     ).fetchall()
     label_counts: dict[str, int] = {r[0]: r[1] for r in label_rows}
     total_lbl    = sum(label_counts.values()) or 1
@@ -453,7 +453,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
     active_alerts = conn.execute(
         "SELECT COUNT(*) FROM raw_articles "
         "WHERE  risk_score >= 60 AND collected_at >= ?",
-        (cutoff_15d,),
+        (cutoff_30d,),
     ).fetchone()[0]
 
     # ── Sentiment trend – last 24 hourly slots ─────────────────────────────────
@@ -574,8 +574,8 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
             f"{_extra_risk} "
             "FROM raw_articles "
             "WHERE risk_score >= 60 AND collected_at >= ? "
-            "ORDER BY risk_score DESC LIMIT 100",
-            (cutoff_15d,),
+            "ORDER BY risk_score DESC LIMIT 200",
+            (cutoff_30d,),
         ).fetchall()
 
         for rr in risk_rows:
