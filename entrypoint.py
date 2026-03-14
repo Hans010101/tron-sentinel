@@ -5,6 +5,7 @@ Cloud Run entry point for TRON Sentinel.
 
 Serves HTTP routes on $PORT (default 8080):
     GET /health      → 200 JSON  health report (scripts/health_check.py)
+    GET /diagnose    → 200 text  full system diagnosis (scripts/diagnose.py)
     GET /            → 200 HTML  dashboard (dashboard/index.html)
     GET /data.json   → 200 JSON  latest dashboard data
                        Triggers a pipeline run on first request if
@@ -43,6 +44,8 @@ class _Handler(BaseHTTPRequestHandler):
         path = self.path.split("?")[0].rstrip("/") or "/"
         if path == "/health":
             self._serve_health()
+        elif path == "/diagnose":
+            self._serve_diagnose()
         elif path == "/":
             self._serve_index()
         elif path == "/data.json":
@@ -67,6 +70,27 @@ class _Handler(BaseHTTPRequestHandler):
             status = 503
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ------------------------------------------------------------------
+
+    def _serve_diagnose(self) -> None:
+        """Run scripts/diagnose.py and return the report as plain text."""
+        try:
+            sys.path.insert(0, str(Path(__file__).parent / "scripts"))
+            from diagnose import run_diagnosis  # noqa: PLC0415
+            report = run_diagnosis()
+            body   = report.encode("utf-8")
+            status = 200
+        except Exception as exc:
+            logger.warning("Diagnose failed: %s", exc)
+            body   = f"Diagnosis error: {exc}".encode("utf-8")
+            status = 500
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
