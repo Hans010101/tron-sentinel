@@ -5,18 +5,18 @@ TRON Sentinel – full data pipeline orchestrator.
 
 Executes in order:
     Step 1   RSS collection          collectors/rss_collector.py
-    Step 2   Apify Twitter/X         collectors/apify_collector.py
+    Step 2   CryptoPanic API         collectors/cryptopanic_api_collector.py
     Step 3   Apify Google Search     collectors/apify_collector.py
     Step 4   Apify YouTube           collectors/apify_collector.py
     Step 5   Apify Reddit            collectors/apify_collector.py
     Step 6   Apify TikTok            collectors/apify_collector.py
     Step 7   Apify Weibo             collectors/apify_collector.py
     Step 8   Bilibili Search         collectors/bilibili_collector.py
-    Step 9   TwitterAPI.io           collectors/twitterapi_collector.py
+    Step 9   TwitterAPI.io (+Apify)  collectors/twitterapi_collector.py
     Step 10  CoinGecko market data   collectors/coingecko_collector.py
     Step 11  DeFiLlama TVL data      collectors/defillama_collector.py
     Step 12  Baidu News RSS          collectors/baidu_collector.py
-    Step 13  CryptoPanic API         collectors/crypto_panic_collector.py
+    Step 13  CryptoPanic RSS         collectors/crypto_panic_collector.py
     Step 14  Sentiment Analysis      analyzers/sentiment_analyzer.py
     Step 15  LLM Deep Analysis       analyzers/llm_analyzer.py
     Step 16  Risk Scoring            analyzers/risk_scorer.py
@@ -185,11 +185,44 @@ def do_collect_bilibili() -> int:
         conn.close()
 
 
+def do_collect_cryptopanic_api() -> dict:
+    """CryptoPanic free API – 4 strategies → returns per-strategy counts dict."""
+    from collectors.cryptopanic_api_collector import open_db, collect_cryptopanic_api  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_cryptopanic_api(conn)
+    finally:
+        conn.close()
+
+
 def do_collect_twitterapi() -> dict:
-    """twitterapi.io keyword + KOL collector → returns result dict."""
-    from collectors.twitterapi_collector import collect_all  # noqa: PLC0415
+    """
+    twitterapi.io keyword + KOL collector, with Apify Twitter/X as fallback.
+
+    If twitterapi.io returns zero articles (e.g. IP blocked / 403), the step
+    automatically falls back to the Apify Twitter actor so coverage is
+    maintained.  Returns a result dict with keys: keyword_count, kol_count,
+    kol_groups, and optionally apify_fallback_count.
+    """
+    from collectors.twitterapi_collector import collect_all as twitterapi_collect_all  # noqa: PLC0415
     api_key = os.environ.get("TWITTERAPI_KEY", "").strip()
-    return collect_all(api_key, DB_PATH)
+    result = twitterapi_collect_all(api_key, DB_PATH)
+
+    # Fallback to Apify Twitter if twitterapi.io yielded nothing
+    if result.get("keyword_count", 0) == 0 and result.get("kol_count", 0) == 0:
+        apify_token = os.environ.get("APIFY_API_TOKEN", "").strip()
+        if apify_token:
+            print("  [回退]  TwitterAPI.io 无数据，尝试 Apify Twitter/X 采集…")
+            from collectors.apify_collector import open_db as apify_open_db, collect_twitter  # noqa: PLC0415
+            conn = apify_open_db(DB_PATH)
+            try:
+                apify_count = collect_twitter(conn)
+                result["apify_fallback_count"] = apify_count
+                print(f"  [Apify 回退]  新增推文 {apify_count} 条")
+            finally:
+                conn.close()
+
+    return result
 
 
 def do_collect_coingecko() -> bool:
@@ -816,12 +849,16 @@ def main() -> None:
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 2: Apify Twitter/X ────────────────────────────────────────────────
-    val, ok = run_step(2, "Apify Twitter/X 采集（Justin Sun / 孙宇晨 / TRON）",
-                       do_collect_apify_twitter)
-    step_ok["apify_twitter"] = ok
-    if ok:
-        print(f"     新增推文 : {val} 条")
+    # ── Step 2: CryptoPanic API ────────────────────────────────────────────────
+    val, ok = run_step(2, "CryptoPanic API 采集（TRX热门 / 全站热门 / 看涨 / 看跌 – 4策略）",
+                       do_collect_cryptopanic_api)
+    step_ok["cryptopanic_api"] = ok
+    if ok and isinstance(val, dict):
+        print(f"     TRX热门  : {val.get('TRX热门', 0)} 条")
+        print(f"     全站热门 : {val.get('全站热门', 0)} 条")
+        print(f"     看涨情绪 : {val.get('看涨情绪', 0)} 条")
+        print(f"     看跌情绪 : {val.get('看跌情绪', 0)} 条")
+        print(f"     合计     : {val.get('total', 0)} 条")
 
     # ── Step 3: Apify Google Search News ───────────────────────────────────────
     val, ok = run_step(3, "Apify Google 新闻采集（Justin Sun / TRON / 波场）",
@@ -865,13 +902,15 @@ def main() -> None:
     if ok:
         print(f"     新增视频 : {val} 条")
 
-    # ── Step 9: TwitterAPI.io ─────────────────────────────────────────────────
-    val, ok = run_step(9, "TwitterAPI.io 采集（关键词搜索 + 317个KOL账号监控）",
+    # ── Step 9: TwitterAPI.io (+ Apify fallback) ──────────────────────────────
+    val, ok = run_step(9, "TwitterAPI.io 采集（关键词搜索 + 371个KOL账号监控；Apify兜底）",
                        do_collect_twitterapi)
     step_ok["twitterapi"] = ok
     if ok and isinstance(val, dict):
         print(f"     关键词搜索: {val.get('keyword_count', 0)} 条")
         print(f"     KOL监控  : {val.get('kol_count', 0)} 条（{val.get('kol_groups', 0)} 组）")
+        if "apify_fallback_count" in val:
+            print(f"     Apify兜底 : {val['apify_fallback_count']} 条")
 
     # ── Step 10: CoinGecko market data ────────────────────────────────────────
     val, ok = run_step(10, "CoinGecko TRX 市场数据", do_collect_coingecko)

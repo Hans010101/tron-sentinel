@@ -143,6 +143,8 @@ def collect_twitterapi(conn: sqlite3.Connection) -> int:
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            raise  # Let collect_all() handle 403 with a clear warning
         print(f"  [TwitterAPI.io]  HTTP错误 {exc.code}: {exc.reason}")
         logger.error("TwitterAPI.io HTTP error: %s %s", exc.code, exc.reason)
         return 0
@@ -269,6 +271,11 @@ def _fetch_group(api_key: str, accounts: list[str]) -> list[dict]:
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         return _extract_tweets(data)[:_KOL_MAX_PER_GROUP]
+    except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            raise  # Let collect_all() handle 403 with a clear warning
+        logger.warning("KOL group fetch failed (%s): HTTP %s", accounts[0], exc.code)
+        return []
     except Exception as exc:
         logger.warning("KOL group fetch failed (%s): %s", accounts[0], exc)
         return []
@@ -370,16 +377,36 @@ def collect_all(api_key: str, db_path: Path = DB_PATH) -> dict:
 
     Returns a dict with keys: keyword_count, kol_count, kol_groups.
     If api_key is empty, skips both and returns zeros.
+    If twitterapi.io returns 403 (IP blocked), prints a warning and
+    returns zeros without raising — the pipeline continues normally.
     """
     if not api_key:
         print("  [TwitterAPI.io]  未配置 TWITTERAPI_KEY，跳过")
         return {"keyword_count": 0, "kol_count": 0, "kol_groups": 0}
 
-    conn = open_db(db_path)
-    keyword_count = collect_twitterapi(conn)
-    conn.close()
+    keyword_count = 0
+    try:
+        conn = open_db(db_path)
+        keyword_count = collect_twitterapi(conn)
+        conn.close()
+    except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            print("  [TwitterAPI.io]  ⚠️ 403 Forbidden – IP可能被封锁或Key无效，跳过Twitter采集")
+            logger.warning("TwitterAPI.io 403: IP blocked or key invalid, skipping all Twitter collection")
+            return {"keyword_count": 0, "kol_count": 0, "kol_groups": 0}
+        print(f"  [TwitterAPI.io]  HTTP错误 {exc.code}: {exc.reason}")
+        logger.error("TwitterAPI.io HTTP error in collect_all: %s", exc.code)
 
-    kol_count, kol_groups = collect_kol_tweets(api_key, db_path)
+    kol_count, kol_groups = 0, 0
+    try:
+        kol_count, kol_groups = collect_kol_tweets(api_key, db_path)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 403:
+            print("  [KOL监控]  ⚠️ 403 Forbidden – IP可能被封锁，跳过KOL采集")
+            logger.warning("TwitterAPI.io 403 during KOL collection: skipping")
+        else:
+            print(f"  [KOL监控]  HTTP错误 {exc.code}: {exc.reason}")
+            logger.error("KOL HTTP error in collect_all: %s", exc.code)
 
     print(
         f"  [TwitterAPI 汇总]  关键词搜索 {keyword_count} 条"
