@@ -636,9 +636,50 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "price_history":  price_history,
     }
 
+    # ── All articles (full 30-day feed for dashboard "最新动态") ──────────────
+    # Fetched without LIMIT so the frontend paginates the complete dataset.
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(raw_articles)")}
+    _extra_all = ""
+    if "llm_summary_zh" in existing_cols:
+        _extra_all += ", llm_summary_zh"
+    if "llm_sector" in existing_cols:
+        _extra_all += ", llm_sector"
+    if "llm_risk_level" in existing_cols:
+        _extra_all += ", llm_risk_level"
+    if "risk_score" in existing_cols:
+        _extra_all += ", risk_score"
+
+    all_article_rows = conn.execute(
+        "SELECT title, source, link, published_at, sentiment_score"
+        f"{_extra_all} "
+        "FROM raw_articles "
+        "WHERE collected_at >= ? "
+        "ORDER BY collected_at DESC",
+        (cutoff_30d,),
+    ).fetchall()
+
+    all_articles: list[dict] = []
+    for ar in all_article_rows:
+        ad: dict = {
+            "title":           ar[0],
+            "source":          ar[1],
+            "link":            ar[2],
+            "time_ago":        _time_ago(ar[3], now),
+            "sentiment_score": ar[4],
+        }
+        idx = 5
+        if "llm_summary_zh" in existing_cols:
+            ad["llm_summary_zh"] = ar[idx]; idx += 1
+        if "llm_sector" in existing_cols:
+            ad["llm_sector"] = ar[idx]; idx += 1
+        if "llm_risk_level" in existing_cols:
+            ad["llm_risk_level"] = ar[idx]; idx += 1
+        if "risk_score" in existing_cols:
+            ad["risk_score"] = ar[idx]; idx += 1
+        all_articles.append(ad)
+
     # ── Risk alerts (risk_score >= 60 in last 15 days) ────────────────────────
     risk_alerts: list[dict] = []
-    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(raw_articles)")}
     if "risk_score" in existing_cols:
         _extra_risk = ""
         if "llm_summary_zh" in existing_cols:
@@ -813,6 +854,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "alerts":           alerts_out,
         "language_volumes": lang_vols,
         "market":           market,
+        "all_articles":     all_articles,
         "risk_alerts":      risk_alerts,
         "llm_stats":        llm_stats,
         "platform_stats":   platform_stats,
