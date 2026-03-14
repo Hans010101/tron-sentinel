@@ -13,42 +13,44 @@
 
 sources:
 
-  # ── Google News TRON/Justin Sun searches (auto skip_relevance_check) ─────────
+  # ── Google News TRON/Justin Sun searches ────────────────────────────────────
+  # Disabled: Cloud Run IPs are blocked by Google News RSS
+  # Replaced by CryptoPanic API (collectors/cryptopanic_api_collector.py)
   - name:     GoogleNews_TRON_TRX
     url:      https://news.google.com/rss/search?q=TRON+TRX+cryptocurrency&hl=en&gl=US&ceid=US:en
     language: en
     category: Google新闻
-    enabled:  true
+    enabled:  false
 
   - name:     GoogleNews_JustinSun
     url:      https://news.google.com/rss/search?q=Justin+Sun+TRON&hl=en&gl=US&ceid=US:en
     language: en
     category: Google新闻
-    enabled:  true
+    enabled:  false
 
   - name:     GoogleNews_JustinSun_CN
     url:      https://news.google.com/rss/search?q=%E5%AD%99%E5%AE%87%E6%99%A8+%E6%B3%A2%E5%9C%BA&hl=zh-CN&gl=CN&ceid=CN:zh-Hans
     language: zh
     category: Google新闻
-    enabled:  true
+    enabled:  false
 
   - name:     GoogleNews_TRON_Blockchain
     url:      https://news.google.com/rss/search?q=TRON+blockchain+crypto&hl=en&gl=US&ceid=US:en
     language: en
     category: Google新闻
-    enabled:  true
+    enabled:  false
 
   - name:     GoogleNews_TRX_Crypto
     url:      https://news.google.com/rss/search?q=TRX+crypto+token&hl=en&gl=US&ceid=US:en
     language: en
     category: Google新闻
-    enabled:  true
+    enabled:  false
 
   - name:     GoogleNews_USDT_TRON
     url:      https://news.google.com/rss/search?q=USDT+TRON+stablecoin&hl=en&gl=US&ceid=US:en
     language: en
     category: Google新闻
-    enabled:  true
+    enabled:  false
 
   # ── English crypto media ─────────────────────────────────────────────────────
   - name:     CoinDesk
@@ -193,65 +195,68 @@ sources:
     enabled:  false              # 无标准RSS源，已禁用
 
   # ── Mainstream media via Google News ────────────────────────────────────────
+  # Disabled: Cloud Run IPs are blocked by Google News RSS
+  # Reuters/Bloomberg/Forbes/BBC etc. coverage is now captured via
+  # CryptoPanic API which aggregates all these sources automatically
   - name:     Reuters_Crypto
     url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:reuters.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     Bloomberg_Crypto
     url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:bloomberg.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     Forbes_Crypto
     url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:forbes.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     CNBC_Crypto
     url:      https://news.google.com/rss/search?q=TRON+TRX+site:cnbc.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     BBC_Crypto
     url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:bbc.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     NYT_Crypto
     url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:nytimes.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     SCMP_Crypto
     url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:scmp.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     Guardian_Crypto
     url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:theguardian.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     WSJ_Crypto
     url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:wsj.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   - name:     FT_Crypto
     url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:ft.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
-    enabled:  true
+    enabled:  false
 
   # ── YouTube channel RSS ──────────────────────────────────────────────────────
   - name:     CoinBureau_YouTube
