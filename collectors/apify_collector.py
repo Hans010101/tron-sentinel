@@ -15,7 +15,7 @@ Collected data is stored in the same ``raw_articles`` SQLite table used
 by the RSS collector, so the dashboard and sentiment pipeline work
 seamlessly.
 
-The APIFY_TOKEN environment variable must be set.  On Cloud Run this is
+The APIFY_API_TOKEN environment variable must be set.  On Cloud Run this is
 injected via Secret Manager; locally it lives in ``.env``.
 """
 
@@ -94,9 +94,9 @@ def open_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
 # ── Apify REST helpers ───────────────────────────────────────────────────────
 
 def _get_token() -> str:
-    token = os.environ.get("APIFY_TOKEN", "").strip()
+    token = os.environ.get("APIFY_API_TOKEN", "").strip()
     if not token:
-        raise RuntimeError("APIFY_TOKEN environment variable is not set")
+        raise RuntimeError("APIFY_API_TOKEN environment variable is not set")
     return token
 
 

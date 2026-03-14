@@ -296,8 +296,19 @@ def fetch_feed(feed_cfg: dict, timeout: int = 10) -> Generator[dict, None, None]
     lang: str   = feed_cfg.get("language", "en")
 
     # Auto-detect Google News search feeds; they are pre-filtered so bypass relevance check
-    is_google_news  = "news.google.com/rss/search" in url
-    skip_relevance  = feed_cfg.get("skip_relevance_check", is_google_news)
+    is_google_news = "news.google.com/rss/search" in url
+
+    # Crypto-specialist sources publish only crypto content – no keyword filter needed.
+    # Sources in 主流媒体 / 主流财经 still need the filter (only some articles are crypto).
+    category = feed_cfg.get("category", "")
+    _CRYPTO_CATEGORIES = {"加密媒体", "中文加密媒体", "TRON专属", "crypto media"}
+    is_crypto_source = category in _CRYPTO_CATEGORIES
+
+    skip_relevance = (
+        feed_cfg.get("skip_relevance_check", False)
+        or is_google_news
+        or is_crypto_source
+    )
 
     req = urllib.request.Request(
         url,

@@ -1,28 +1,26 @@
 """
 collectors/cryptopanic_api_collector.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-CryptoPanic free API collector – multi-strategy edition.
+CoinGecko News API collector – free, no auth token required.
 
-CryptoPanic aggregates crypto news from Reuters, Bloomberg, CoinDesk,
-Forbes, BBC, CNBC and 300+ other sources.  The free public API requires
-no authentication token.
+CoinGecko aggregates crypto news from CoinDesk, Reuters, Bloomberg,
+Forbes, BBC, Decrypt, The Block, and 100+ other publishers.
 
-Four fetch strategies per run:
-    1. TRX hot    – currencies=TRX&filter=hot        (coin-specific)
-    2. Global hot – filter=hot                        (industry-wide)
-    3. Bullish    – filter=bullish&regions=en,cn      (sentiment)
-    4. Bearish    – filter=bearish&regions=en,cn      (sentiment)
+Endpoint:
+    GET https://api.coingecko.com/api/v3/news
+    Returns up to 100 articles per call, no key required.
 
-Each strategy fetches up to 40 posts (API default per page).
-Results are stored in raw_articles with source = "CryptoPanic:{media}".
-URL-based deduplication is handled by INSERT OR IGNORE.
-Only articles from the last 30 days are kept.
+Source is stored as the originating publisher name (``news_site`` field),
+e.g. "CoinDesk", "Reuters", "Forbes". URL-based deduplication via
+INSERT OR IGNORE. 30-day freshness filter applied.
+
+Function renamed from collect_cryptopanic_api() →  collect_crypto_news_api()
+so callers in main.py are updated accordingly.
 """
 
 import json
 import logging
 import sqlite3
-import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -31,7 +29,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 DB_PATH  = Path(__file__).parent.parent / "data" / "sentinel.db"
-_BASE    = "https://cryptopanic.com/api/free/v1/posts/"
+_API_URL = "https://api.coingecko.com/api/v3/news"
 _TIMEOUT = 20
 
 # ── SQL (identical schema to rss_collector / apify_collector) ─────────────────
@@ -61,42 +59,6 @@ VALUES
     (:title, :link, :published_at, :source, :summary, :language, :collected_at)
 """
 
-# ── Fetch strategies ──────────────────────────────────────────────────────────
-
-_STRATEGIES: list[dict] = [
-    {
-        "label":  "TRX热门",
-        "params": "currencies=TRX&filter=hot&public=true",
-        "lang":   "en",
-    },
-    {
-        "label":  "全站热门",
-        "params": "filter=hot&public=true",
-        "lang":   "en",
-    },
-    {
-        "label":  "看涨情绪",
-        "params": "filter=bullish&regions=en,cn&public=true",
-        "lang":   "en",
-    },
-    {
-        "label":  "看跌情绪",
-        "params": "filter=bearish&regions=en,cn&public=true",
-        "lang":   "en",
-    },
-]
-
-_NOISE_PATTERNS = (
-    "price today", "live price", "price prediction", "to usd",
-    "price analysis", "price forecast", "trading at",
-)
-
-
-def _is_noise(title: str) -> bool:
-    t = title.lower()
-    return any(p in t for p in _NOISE_PATTERNS)
-
-
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def open_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
@@ -112,17 +74,30 @@ def open_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
 
 # ── API fetch ─────────────────────────────────────────────────────────────────
 
-def _fetch_posts(params: str) -> list[dict]:
-    """Call CryptoPanic API and return the results list (up to 40 items)."""
-    url = f"{_BASE}?{params}"
+def _fetch_news() -> list[dict]:
+    """
+    Call CoinGecko /news endpoint and return the article list.
+
+    On HTTP error: prints status + response snippet, returns [].
+    On any other error: prints the exception, returns [].
+    """
     req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; TRONSentinel/1.0)"},
+        _API_URL,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; TRONSentinel/1.0)",
+            "Accept":     "application/json",
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        return data.get("results", [])
+        # CoinGecko wraps items in a "data" key
+        if isinstance(data, dict):
+            items = data.get("data", data.get("results", []))
+        else:
+            items = data  # top-level list fallback
+        logger.info("CoinGecko News: received %d items", len(items))
+        return items if isinstance(items, list) else []
     except urllib.error.HTTPError as exc:
         body_snippet = ""
         try:
@@ -130,120 +105,112 @@ def _fetch_posts(params: str) -> list[dict]:
         except Exception:
             pass
         logger.warning(
-            "CryptoPanic API HTTP %s for params=%s  body=%s",
-            exc.code, params, body_snippet,
+            "CoinGecko News API HTTP %s  body=%s", exc.code, body_snippet
         )
-        print(
-            f"  [CryptoPanic API]  HTTP {exc.code} {exc.reason} "
-            f"(params={params[:60]})"
-        )
+        print(f"  [CoinGecko News]  HTTP {exc.code} {exc.reason}")
         if body_snippet:
-            print(f"  [CryptoPanic API]  响应内容: {body_snippet}")
+            print(f"  [CoinGecko News]  响应内容: {body_snippet}")
         return []
     except Exception as exc:
-        logger.warning("CryptoPanic API fetch failed (%s): %s", params, exc)
-        print(f"  [CryptoPanic API]  请求失败 (params={params[:60]}): {exc}")
+        logger.warning("CoinGecko News API fetch failed: %s", exc)
+        print(f"  [CoinGecko News]  请求失败: {exc}")
         return []
-
-
-# ── Insert helpers ────────────────────────────────────────────────────────────
-
-def _insert_posts(
-    cur: sqlite3.Cursor,
-    posts: list[dict],
-    default_lang: str,
-    cutoff: datetime,
-    now_utc: str,
-) -> int:
-    """Insert posts into raw_articles, return count of new rows."""
-    inserted = 0
-    for post in posts:
-        title = (post.get("title") or "").strip()
-        url   = (post.get("url")   or "").strip()
-        if not title or not url:
-            continue
-        if _is_noise(title):
-            continue
-
-        # published_at
-        pub_raw = post.get("published_at", "")
-        try:
-            pub_dt = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
-            if pub_dt.tzinfo is None:
-                pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-            if pub_dt < cutoff:
-                continue
-            published_at = pub_dt.isoformat()
-        except (ValueError, AttributeError):
-            published_at = now_utc
-
-        # source: "CryptoPanic:{media_title}"
-        src_info    = post.get("source") or {}
-        media_title = (src_info.get("title") or "CryptoPanic") if isinstance(src_info, dict) else "CryptoPanic"
-        source      = f"CryptoPanic:{media_title}"
-
-        # currencies mentioned
-        currencies_list = post.get("currencies") or []
-        coins = ", ".join(
-            c.get("code", "") for c in currencies_list if isinstance(c, dict)
-        )
-
-        # vote summary
-        votes = post.get("votes") or {}
-        pos   = votes.get("positive", 0)
-        neg   = votes.get("negative", 0)
-        imp   = votes.get("important", 0)
-        lkd   = votes.get("liked", 0)
-        vote_str = f"👍{pos} 👎{neg} ❗{imp} ♥{lkd}"
-
-        summary = f"Coins: {coins or 'N/A'} | {vote_str} | via {media_title}"
-
-        row = {
-            "title":        title,
-            "link":         url,
-            "published_at": published_at,
-            "source":       source,
-            "summary":      summary[:500],
-            "language":     default_lang,
-            "collected_at": now_utc,
-        }
-        cur.execute(_INSERT, row)
-        inserted += cur.rowcount
-
-    return inserted
 
 
 # ── Main collector ────────────────────────────────────────────────────────────
 
-def collect_cryptopanic_api(conn: sqlite3.Connection) -> dict[str, int]:
+def collect_crypto_news_api(conn: sqlite3.Connection) -> dict[str, int]:
     """
-    Run all four fetch strategies and store results in raw_articles.
+    Fetch CoinGecko news and store in raw_articles.
 
-    Returns a dict mapping strategy label → newly inserted count.
-    Also returns a "total" key with the aggregate.
+    Returns a dict:
+        {
+          "fetched":  <total items received from API>,
+          "inserted": <new rows actually written to DB>,
+          "skipped":  <duplicates / outside 30-day window>,
+        }
     """
     now_dt   = datetime.now(tz=timezone.utc)
     now_utc  = now_dt.isoformat()
     cutoff   = now_dt - timedelta(days=30)
     cur      = conn.cursor()
-    counts: dict[str, int] = {}
 
-    for i, strategy in enumerate(_STRATEGIES):
-        label  = strategy["label"]
-        params = strategy["params"]
-        lang   = strategy["lang"]
+    items = _fetch_news()
+    fetched  = len(items)
+    inserted = 0
+    skipped  = 0
 
-        posts = _fetch_posts(params)
-        n = _insert_posts(cur, posts, lang, cutoff, now_utc)
-        counts[label] = n
-        logger.info("CryptoPanic [%s]: fetched %d posts, inserted %d new", label, len(posts), n)
+    for item in items:
+        if not isinstance(item, dict):
+            skipped += 1
+            continue
 
-        conn.commit()
-        if i < len(_STRATEGIES) - 1:
-            time.sleep(0.5)   # be polite to the free API
+        title = (item.get("title") or "").strip()
+        url   = (item.get("url") or "").strip()
+        if not title or not url:
+            skipped += 1
+            continue
 
-    counts["total"] = sum(counts.values())
-    return counts
+        # Published timestamp
+        pub_raw = item.get("published_at") or ""
+        try:
+            pub_dt = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
+            if pub_dt.tzinfo is None:
+                pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+            if pub_dt < cutoff:
+                skipped += 1
+                continue
+            published_at = pub_dt.isoformat()
+        except (ValueError, AttributeError):
+            published_at = now_utc
+
+        # Source = originating publisher, fallback to "CoinGecko News"
+        news_site = (item.get("news_site") or "").strip() or "CoinGecko News"
+
+        # Summary from description field
+        description = (item.get("description") or "").strip()
+        author      = (item.get("author") or "").strip()
+        category    = (item.get("category") or "").strip()
+        summary_parts = []
+        if description:
+            summary_parts.append(description[:400])
+        if author:
+            summary_parts.append(f"作者: {author}")
+        if category:
+            summary_parts.append(f"分类: {category}")
+        summary = " | ".join(summary_parts)[:500]
+
+        row = {
+            "title":        title,
+            "link":         url,
+            "published_at": published_at,
+            "source":       news_site,
+            "summary":      summary,
+            "language":     "en",
+            "collected_at": now_utc,
+        }
+        cur.execute(_INSERT, row)
+        if cur.rowcount:
+            inserted += 1
+        else:
+            skipped += 1
+
+    conn.commit()
+
+    print(
+        f"  [CoinGecko News]  获取 {fetched} 条，"
+        f"新增 {inserted} 条，跳过 {skipped} 条（重复/过旧）"
+    )
+    logger.info(
+        "CoinGecko News: fetched=%d inserted=%d skipped=%d",
+        fetched, inserted, skipped,
+    )
+    return {"fetched": fetched, "inserted": inserted, "skipped": skipped}
+
+
+# ── Backward-compat alias ─────────────────────────────────────────────────────
+# main.py still calls collect_cryptopanic_api() until updated; keep alias.
+collect_cryptopanic_api = collect_crypto_news_api
 
 
 # ── Standalone entry point ────────────────────────────────────────────────────
@@ -257,12 +224,10 @@ def main() -> None:
     conn = open_db()
     print(f"\n数据库位置: {DB_PATH.resolve()}\n")
     try:
-        counts = collect_cryptopanic_api(conn)
-        print("\n  CryptoPanic API 采集结果：")
-        for label, n in counts.items():
-            if label != "total":
-                print(f"    {label:<10}  {n} 条新记录")
-        print(f"    {'合计':<10}  {counts['total']} 条\n")
+        result = collect_crypto_news_api(conn)
+        print(f"\n  获取总数 : {result['fetched']} 条")
+        print(f"  新增入库 : {result['inserted']} 条")
+        print(f"  跳过     : {result['skipped']} 条\n")
     finally:
         conn.close()
 

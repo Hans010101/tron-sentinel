@@ -5,7 +5,7 @@ TRON Sentinel – full data pipeline orchestrator.
 
 Executes in order:
     Step 1   RSS collection          collectors/rss_collector.py
-    Step 2   CryptoPanic API         collectors/cryptopanic_api_collector.py
+    Step 2   CoinGecko News API      collectors/cryptopanic_api_collector.py
     Step 3   Apify Google Search     collectors/apify_collector.py
     Step 4   Apify YouTube           collectors/apify_collector.py
     Step 5   Apify Reddit            collectors/apify_collector.py
@@ -219,14 +219,14 @@ def do_collect_bilibili() -> int:
 
 
 def do_collect_cryptopanic_api() -> dict:
-    """CryptoPanic free API – 4 strategies → returns per-strategy counts dict."""
-    from collectors.cryptopanic_api_collector import open_db, collect_cryptopanic_api  # noqa: PLC0415
+    """CoinGecko News API – free, no key → returns {fetched, inserted, skipped}."""
+    from collectors.cryptopanic_api_collector import open_db, collect_crypto_news_api  # noqa: PLC0415
     conn = open_db(DB_PATH)
     try:
-        return collect_cryptopanic_api(conn)
+        return collect_crypto_news_api(conn)
     except Exception as exc:
-        print(f"  [CryptoPanic API]  ✗ 采集异常: {type(exc).__name__}: {exc}")
-        print("  [CryptoPanic API]  完整堆栈:")
+        print(f"  [CoinGecko News]  ✗ 采集异常: {type(exc).__name__}: {exc}")
+        print("  [CoinGecko News]  完整堆栈:")
         for line in traceback.format_exc().splitlines():
             print(f"    {line}")
         raise
@@ -915,16 +915,14 @@ def _main_body() -> None:
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 2: CryptoPanic API ────────────────────────────────────────────────
-    val, ok = run_step(2, "CryptoPanic API 采集（TRX热门 / 全站热门 / 看涨 / 看跌 – 4策略）",
+    # ── Step 2: CoinGecko News API ────────────────────────────────────────────
+    val, ok = run_step(2, "CoinGecko News API 采集（免费，无需Key，100条/次）",
                        do_collect_cryptopanic_api)
     step_ok["cryptopanic_api"] = ok
     if ok and isinstance(val, dict):
-        print(f"     TRX热门  : {val.get('TRX热门', 0)} 条")
-        print(f"     全站热门 : {val.get('全站热门', 0)} 条")
-        print(f"     看涨情绪 : {val.get('看涨情绪', 0)} 条")
-        print(f"     看跌情绪 : {val.get('看跌情绪', 0)} 条")
-        print(f"     合计     : {val.get('total', 0)} 条")
+        print(f"     获取总数 : {val.get('fetched', 0)} 条")
+        print(f"     新增入库 : {val.get('inserted', 0)} 条")
+        print(f"     跳过重复 : {val.get('skipped', 0)} 条")
 
     # ── Step 3: Apify Google Search News ───────────────────────────────────────
     val, ok = run_step(3, "Apify Google 新闻采集（Justin Sun / TRON / 波场）",
