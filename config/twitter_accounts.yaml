@@ -1,5 +1,6 @@
 # Justin Sun + CZ + Star OKX 关注的加密/Web3行业账号（已去除政客、体育、纯AI等非相关账号）
-# 共317个，按 from: 分组批量搜索，每组10个账号 = 约32次API调用
+# + 华语加密媒体、华语顶级KOL、英文顶级加密KOL、机构/交易所/项目方
+# 共371个，按 from: 分组批量搜索，每组10个账号 = 约38次API调用
 accounts:
   - Cointelegraph
   - UmarCheema1
@@ -318,3 +319,65 @@ accounts:
   - AgenticAIFdn
   - tangpingnomics
   - ChantsBrads
+
+  # ===== 华语加密媒体 =====
+  - WuBlockchain
+  - wublockchain12
+  - PANewsCN
+  - BlockBeatsAsia
+  - OdailyChina
+  - chaincatcher_
+  - TechFlowPost
+  - 8BTCnews
+  - ForesightNews_
+  - marsbit
+  - BitpushNewsCN
+  - BlockTempo
+
+  # ===== 华语顶级KOL =====
+  - Phyrex_Ni
+  - tmel0211
+  - 0xSunNFT
+  - WolfyXBT
+  - Ai_Yi_Zhong
+  - CryptoPainter_X
+  - bitfish1
+  - jasonchen998
+  - starzqeth
+  - BiteyeCN
+  - 0xKingsKuan
+  - biquanliergou
+  - wenser2010
+  - Asher_0210
+  - unicornbitcoin
+  - Cryptojiejie
+  - ZhouFinancial
+  - KuiGas
+
+  # ===== 英文顶级加密KOL =====
+  - VitalikButerin
+  - CryptoHayes
+  - zachxbt
+  - cobie
+  - lookonchain
+  - EmberCN
+  - whale_alert
+  - DefiIgnas
+  - Route2FI
+  - 0xMert_
+  - blknoiz06
+  - CryptoCapo_
+  - AltcoinGordon
+  - MichaelXBT
+
+  # ===== 机构/交易所/项目方 =====
+  - trondao
+  - binance
+  - okx
+  - HTX_Global
+  - Poloniex
+  - Tether_to
+  - circle
+  - coinbase
+  - BitgetGlobal
+  - KuCoin_Global
