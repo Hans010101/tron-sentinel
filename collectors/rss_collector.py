@@ -3,7 +3,7 @@ collectors/rss_collector.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 RSS feed collector for crypto news sources.
 
-Fetches articles from CoinDesk, Decrypt, CoinTelegraph, and BlockBeats,
+Fetches articles from 50+ RSS sources concurrently using ThreadPoolExecutor,
 then stores them in a local SQLite database (data/sentinel.db).
 
 Usage:
@@ -12,10 +12,12 @@ Usage:
 """
 
 import calendar
+import concurrent.futures
 import html
 import logging
 import re
 import sqlite3
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Generator
@@ -70,10 +72,11 @@ def _load_feeds_from_yaml(yaml_path: Path) -> list[dict] | None:
             logger.warning("RSS source entry missing name/url – skipping: %s", entry)
             continue
         feeds.append({
-            "source":   name,
-            "url":      url,
-            "language": entry.get("language", "en"),
-            "category": entry.get("category", ""),
+            "source":               name,
+            "url":                  url,
+            "language":             entry.get("language", "en"),
+            "category":             entry.get("category", ""),
+            "skip_relevance_check": entry.get("skip_relevance_check", False),
         })
 
     logger.info(
@@ -147,124 +150,26 @@ _RELEVANCE_KEYWORDS, _NOISE_TITLE_PATTERNS = _build_keyword_sets()
 
 _FEEDS_HARDCODED: list[dict] = [
     # ── English crypto media ──────────────────────────────────────────────────
-    {
-        "source":   "CoinDesk",
-        "url":      "https://feeds.feedburner.com/CoinDesk",
-        "language": "en",
-    },
-    {
-        "source":   "CoinTelegraph",
-        "url":      "https://cointelegraph.com/rss",
-        "language": "en",
-    },
-    {
-        "source":   "Decrypt",
-        "url":      "https://decrypt.co/feed",
-        "language": "en",
-    },
-    {
-        "source":   "TheBlock",
-        "url":      "https://www.theblock.co/rss.xml",
-        "language": "en",
-    },
-    {
-        "source":   "Blockworks",
-        "url":      "https://blockworks.co/feed",
-        "language": "en",
-    },
-    {
-        "source":   "BitcoinMagazine",
-        "url":      "https://bitcoinmagazine.com/.rss/full/",
-        "language": "en",
-    },
-    {
-        "source":   "DLNews",
-        "url":      "https://www.dlnews.com/arc/outboundfeeds/rss/",
-        "language": "en",
-    },
-    {
-        "source":   "Protos",
-        "url":      "https://protos.com/feed/",
-        "language": "en",
-    },
-    {
-        "source":   "TheDefiant",
-        "url":      "https://thedefiant.io/feed",
-        "language": "en",
-    },
-    # ── Google News (English) ─────────────────────────────────────────────────
-    {
-        "source":   "GoogleNews_TRON",
-        "url":      "https://news.google.com/rss/search?q=TRON+TRX+cryptocurrency&hl=en&gl=US&ceid=US:en",
-        "language": "en",
-    },
-    {
-        "source":   "GoogleNews_JustinSun",
-        "url":      "https://news.google.com/rss/search?q=Justin+Sun+TRON&hl=en&gl=US&ceid=US:en",
-        "language": "en",
-    },
+    {"source": "CoinDesk",       "url": "https://feeds.feedburner.com/CoinDesk",          "language": "en"},
+    {"source": "CoinTelegraph",  "url": "https://cointelegraph.com/rss",                  "language": "en"},
+    {"source": "Decrypt",        "url": "https://decrypt.co/feed",                         "language": "en"},
+    {"source": "TheBlock",       "url": "https://www.theblock.co/rss.xml",                "language": "en"},
+    {"source": "Blockworks",     "url": "https://blockworks.co/feed",                     "language": "en"},
+    {"source": "BitcoinMagazine","url": "https://bitcoinmagazine.com/.rss/full/",          "language": "en"},
+    {"source": "DLNews",         "url": "https://www.dlnews.com/arc/outboundfeeds/rss/",  "language": "en"},
+    {"source": "TheDefiant",     "url": "https://thedefiant.io/feed",                     "language": "en"},
+    # ── Google News ───────────────────────────────────────────────────────────
+    {"source": "GoogleNews_TRON_TRX",   "url": "https://news.google.com/rss/search?q=TRON+TRX+cryptocurrency&hl=en&gl=US&ceid=US:en",  "language": "en"},
+    {"source": "GoogleNews_JustinSun",  "url": "https://news.google.com/rss/search?q=Justin+Sun+TRON&hl=en&gl=US&ceid=US:en",          "language": "en"},
     # ── Chinese crypto media ──────────────────────────────────────────────────
-    {
-        "source":   "BlockBeats",
-        "url":      "https://www.theblockbeats.info/rss",
-        "language": "zh",
-    },
-    {
-        "source":   "JinSeCaiJing",
-        "url":      "https://www.jinse.cn/rss",
-        "language": "zh",
-    },
-    {
-        "source":   "PANews",
-        "url":      "https://www.panewslab.com/rss/zh/index.xml",
-        "language": "zh",
-    },
-    {
-        "source":   "ShenChaoTechFlow",
-        "url":      "https://www.techflowpost.com/rss",
-        "language": "zh",
-    },
-    {
-        "source":   "Bitpush",
-        "url":      "https://www.bitpush.news/feed",
-        "language": "zh",
-    },
-    {
-        "source":   "8BTC",
-        "url":      "https://www.8btc.com/feed",
-        "language": "zh",
-    },
-    {
-        "source":   "BlockTempo",
-        "url":      "https://www.blocktempo.com/feed/",
-        "language": "zh",
-    },
+    {"source": "BlockBeats",     "url": "https://www.theblockbeats.info/rss",             "language": "zh"},
+    {"source": "JinSeCaiJing",   "url": "https://www.jinse.cn/rss",                       "language": "zh"},
+    {"source": "PANews",         "url": "https://www.panewslab.com/rss/zh/index.xml",     "language": "zh"},
+    {"source": "ShenChaoTechFlow","url": "https://www.techflowpost.com/rss",              "language": "zh"},
     # ── Mainstream media ──────────────────────────────────────────────────────
-    {
-        "source":   "Reuters_Tech",
-        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:reuters.com&hl=en&gl=US&ceid=US:en",
-        "language": "en",
-    },
-    {
-        "source":   "BBC_Crypto",
-        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:bbc.com&hl=en&gl=US&ceid=US:en",
-        "language": "en",
-    },
-    {
-        "source":   "Guardian_Crypto",
-        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:theguardian.com&hl=en&gl=US&ceid=US:en",
-        "language": "en",
-    },
-    {
-        "source":   "SCMP_Crypto",
-        "url":      "https://news.google.com/rss/search?q=TRON+Justin+Sun+site:scmp.com&hl=en&gl=US&ceid=US:en",
-        "language": "en",
-    },
-    {
-        "source":   "Forbes_Crypto",
-        "url":      "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:forbes.com&hl=en&gl=US&ceid=US:en",
-        "language": "en",
-    },
+    {"source": "Reuters_Crypto", "url": "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:reuters.com&hl=en&gl=US&ceid=US:en", "language": "en"},
+    {"source": "BBC_Crypto",     "url": "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:bbc.com&hl=en&gl=US&ceid=US:en",     "language": "en"},
+    {"source": "Forbes_Crypto",  "url": "https://news.google.com/rss/search?q=TRON+cryptocurrency+site:forbes.com&hl=en&gl=US&ceid=US:en",  "language": "en"},
 ]
 
 _SUMMARY_MAX_LEN = 500
@@ -348,6 +253,17 @@ def _get_summary(entry: feedparser.FeedParserDict) -> str:
     return _strip_html(raw)[:_SUMMARY_MAX_LEN]
 
 
+def _extract_google_news_source(title: str) -> tuple[str, str]:
+    """
+    Google News RSS titles have format: "Article Title - Source Name".
+    Returns (clean_title, source_name).
+    """
+    parts = title.rsplit(" - ", 1)
+    if len(parts) == 2 and parts[1].strip():
+        return parts[0].strip(), parts[1].strip()
+    return title, "Google News"
+
+
 # ── Database ───────────────────────────────────────────────────────────────────
 
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
@@ -368,30 +284,29 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
 
 # ── Feed fetching ──────────────────────────────────────────────────────────────
 
-def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
+def fetch_feed(feed_cfg: dict, timeout: int = 10) -> Generator[dict, None, None]:
     """
     Parse a single RSS/Atom feed and yield article dicts ready for DB insert.
 
-    Skips entries that have no usable URL or no title.  If the feed is entirely
-    unreachable an error is logged and the generator exits without raising.
+    Uses urllib with a 10-second timeout to avoid hanging on slow sources.
+    Raises exceptions on network/parse failure (caller handles them).
     """
     source: str = feed_cfg["source"]
     url: str    = feed_cfg["url"]
     lang: str   = feed_cfg.get("language", "en")
 
-    logger.info("Fetching %-15s %s", f"[{source}]", url)
+    # Auto-detect Google News search feeds; they are pre-filtered so bypass relevance check
+    is_google_news  = "news.google.com/rss/search" in url
+    skip_relevance  = feed_cfg.get("skip_relevance_check", is_google_news)
 
-    try:
-        parsed = feedparser.parse(url)
-    except Exception as exc:                         # network-level failure
-        logger.error("[%s] Could not fetch feed: %s", source, exc)
-        return
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 TRONSentinel/2.0"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        content = resp.read()
 
-    # feedparser sets bozo=True for malformed XML but may still have entries.
-    if parsed.get("bozo") and not parsed.get("entries"):
-        exc = parsed.get("bozo_exception", "unknown error")
-        logger.warning("[%s] Feed is malformed and has no entries: %s", source, exc)
-        return
+    parsed = feedparser.parse(content)
 
     now_utc    = datetime.now(tz=timezone.utc)
     cutoff_30d = now_utc - timedelta(days=30)
@@ -402,16 +317,27 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
         if not link:
             continue
 
-        title = _strip_html(getattr(entry, "title", "") or "")
+        raw_title = _strip_html(getattr(entry, "title", "") or "")
+        if not raw_title:
+            continue
+
+        # For Google News feeds, extract the real source name from the title
+        if is_google_news:
+            title, real_source = _extract_google_news_source(raw_title)
+            article_source = real_source  # store the actual publisher
+        else:
+            title         = raw_title
+            article_source = source
+
         if not title:
             continue
 
-        # Skip articles not related to TRON/Justin Sun
-        if not _is_relevant(title):
+        # Skip articles not related to TRON/Justin Sun (unless feed is pre-filtered)
+        if not skip_relevance and not _is_relevant(title):
             continue
 
         published_at = _parse_published(entry)
-        # Skip entries older than 15 days
+        # Skip entries older than 30 days
         if published_at:
             try:
                 pub_dt = datetime.fromisoformat(published_at)
@@ -426,7 +352,7 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
             "title":        title,
             "link":         link,
             "published_at": published_at,
-            "source":       source,
+            "source":       article_source,
             "summary":      _get_summary(entry),
             "language":     lang,
             "collected_at": now_utc_s,
@@ -450,41 +376,67 @@ def _get_active_feeds() -> list[dict]:
     return _FEEDS_HARDCODED
 
 
+def _fetch_articles_for_feed(feed_cfg: dict) -> tuple[str, list[dict], str | None]:
+    """
+    Thread worker: fetch a single feed and return (source, articles, error_or_None).
+    Network I/O happens here; DB writes remain on the main thread.
+    """
+    source = feed_cfg["source"]
+    try:
+        articles = list(fetch_feed(feed_cfg, timeout=10))
+        return source, articles, None
+    except Exception as exc:
+        return source, [], str(exc)
+
+
 def collect_all(conn: sqlite3.Connection) -> int:
     """
-    Iterate every active feed, insert new articles, and return the total
-    count of rows actually inserted (duplicates are silently skipped).
-
-    Active feeds are loaded from ``config/rss_sources.yaml`` when available;
-    the hardcoded ``_FEEDS_HARDCODED`` list is used as a fallback.
+    Concurrently fetch every active feed with ThreadPoolExecutor(max_workers=5),
+    insert new articles on the main thread, and return the total count of rows
+    actually inserted (duplicates are silently skipped via INSERT OR IGNORE).
     """
-    feeds = _get_active_feeds()
+    feeds    = _get_active_feeds()
+    n_total  = len(feeds)
+    n_success = 0
+    n_fail    = 0
     total_new = 0
-    cur = conn.cursor()
+    cur       = conn.cursor()
 
-    for feed_cfg in feeds:
-        source = feed_cfg["source"]
-        new_in_feed = 0
-        fetch_error: str | None = None
-        try:
-            for article in fetch_feed(feed_cfg):
-                cur.execute(_INSERT, article)
-                new_in_feed += cur.rowcount   # 1 if inserted, 0 if duplicate
-            conn.commit()
-            logger.info("[%s] Inserted %d new article(s)", source, new_in_feed)
-            print(f"  [{source}]  成功 {new_in_feed} 条")
-        except sqlite3.Error as exc:
-            conn.rollback()
-            fetch_error = str(exc)
-            logger.error("[%s] DB error, rolled back: %s", source, exc)
-            print(f"  [{source}]  数据库错误: {exc}")
-        except Exception as exc:
-            fetch_error = str(exc)
-            logger.error("[%s] Unexpected error: %s", source, exc)
-            print(f"  [{source}]  失败: {exc}")
+    print(f"  共 {n_total} 个RSS源，并发采集中（max_workers=5）...")
 
-        total_new += new_in_feed
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(_fetch_articles_for_feed, feed): feed
+            for feed in feeds
+        }
+        for future in concurrent.futures.as_completed(futures):
+            feed_cfg = futures[future]
+            source   = feed_cfg["source"]
+            try:
+                src, articles, error = future.result(timeout=15)
+                if error:
+                    print(f"  [{src}]  失败: {error}")
+                    n_fail += 1
+                    continue
+                new_in_feed = 0
+                for article in articles:
+                    try:
+                        cur.execute(_INSERT, article)
+                        new_in_feed += cur.rowcount
+                    except sqlite3.Error as exc:
+                        logger.warning("[%s] DB insert error: %s", src, exc)
+                conn.commit()
+                print(f"  [{src}]  成功 {new_in_feed} 条")
+                total_new += new_in_feed
+                n_success += 1
+            except concurrent.futures.TimeoutError:
+                print(f"  [{source}]  超时（>15s），跳过")
+                n_fail += 1
+            except Exception as exc:
+                print(f"  [{source}]  失败: {exc}")
+                n_fail += 1
 
+    print(f"  总源数: {n_total}  成功: {n_success}  失败: {n_fail}  新增: {total_new} 条")
     return total_new
 
 

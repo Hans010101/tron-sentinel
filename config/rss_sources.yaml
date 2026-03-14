@@ -4,15 +4,53 @@
 # To disable a source: set  enabled: false
 #
 # Fields:
-#   name     – unique identifier (stored as `source` in the database)
-#   url      – RSS / Atom feed URL
-#   language – ISO 639-1 code: en | zh | ja | ko …
-#   category – human-readable group label (for display only)
-#   enabled  – true | false
+#   name                – unique identifier (stored as `source` in the database)
+#   url                 – RSS / Atom feed URL
+#   language            – ISO 639-1 code: en | zh | ja | ko …
+#   category            – human-readable group label (for display only)
+#   enabled             – true | false
+#   skip_relevance_check – true to bypass TRON keyword filter (for pre-filtered feeds)
 
 sources:
 
-  # ── English crypto media ────────────────────────────────────────────────────
+  # ── Google News TRON/Justin Sun searches (auto skip_relevance_check) ─────────
+  - name:     GoogleNews_TRON_TRX
+    url:      https://news.google.com/rss/search?q=TRON+TRX+cryptocurrency&hl=en&gl=US&ceid=US:en
+    language: en
+    category: Google新闻
+    enabled:  true
+
+  - name:     GoogleNews_JustinSun
+    url:      https://news.google.com/rss/search?q=Justin+Sun+TRON&hl=en&gl=US&ceid=US:en
+    language: en
+    category: Google新闻
+    enabled:  true
+
+  - name:     GoogleNews_JustinSun_CN
+    url:      https://news.google.com/rss/search?q=%E5%AD%99%E5%AE%87%E6%99%A8+%E6%B3%A2%E5%9C%BA&hl=zh-CN&gl=CN&ceid=CN:zh-Hans
+    language: zh
+    category: Google新闻
+    enabled:  true
+
+  - name:     GoogleNews_TRON_Blockchain
+    url:      https://news.google.com/rss/search?q=TRON+blockchain+crypto&hl=en&gl=US&ceid=US:en
+    language: en
+    category: Google新闻
+    enabled:  true
+
+  - name:     GoogleNews_TRX_Crypto
+    url:      https://news.google.com/rss/search?q=TRX+crypto+token&hl=en&gl=US&ceid=US:en
+    language: en
+    category: Google新闻
+    enabled:  true
+
+  - name:     GoogleNews_USDT_TRON
+    url:      https://news.google.com/rss/search?q=USDT+TRON+stablecoin&hl=en&gl=US&ceid=US:en
+    language: en
+    category: Google新闻
+    enabled:  true
+
+  # ── English crypto media ─────────────────────────────────────────────────────
   - name:     CoinDesk
     url:      https://feeds.feedburner.com/CoinDesk
     language: en
@@ -37,8 +75,20 @@ sources:
     category: 加密媒体
     enabled:  true
 
-  - name:     Blockworks
-    url:      https://blockworks.co/feed
+  - name:     CryptoNews
+    url:      https://cryptonews.com/news/feed/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     NewsBTC
+    url:      https://www.newsbtc.com/feed/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     BitcoinNews
+    url:      https://news.bitcoin.com/feed/
     language: en
     category: 加密媒体
     enabled:  true
@@ -49,46 +99,71 @@ sources:
     category: 加密媒体
     enabled:  true
 
-  - name:     DLNews
-    url:      https://www.dlnews.com/arc/outboundfeeds/rss/
-    language: en
-    category: 加密媒体
-    enabled:  true
-
-  - name:     Protos
-    url:      https://protos.com/feed/
-    language: en
-    category: 加密媒体
-    enabled:  true
-
   - name:     TheDefiant
     url:      https://thedefiant.io/feed
     language: en
     category: 加密媒体
     enabled:  true
 
-  # ── Google News (English) ───────────────────────────────────────────────────
-  - name:     GoogleNews_TRON
-    url:      https://news.google.com/rss/search?q=TRON+TRX+cryptocurrency&hl=en&gl=US&ceid=US:en
+  - name:     Blockworks
+    url:      https://blockworks.co/feed
     language: en
-    category: Google新闻
+    category: 加密媒体
     enabled:  true
 
-  - name:     GoogleNews_JustinSun
-    url:      https://news.google.com/rss/search?q=Justin+Sun+TRON&hl=en&gl=US&ceid=US:en
+  - name:     DLNews
+    url:      https://www.dlnews.com/arc/outboundfeeds/rss/
     language: en
-    category: Google新闻
+    category: 加密媒体
     enabled:  true
 
-  # ── Chinese crypto media ────────────────────────────────────────────────────
-  - name:     BlockBeats
-    url:      https://www.theblockbeats.info/rss
+  - name:     CryptoBriefing
+    url:      https://cryptobriefing.com/feed/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     TronWeekly
+    url:      https://www.tronweekly.com/feed/
+    language: en
+    category: 加密媒体
+    enabled:  true
+    skip_relevance_check: true
+
+  - name:     CryptoPanic_RSS
+    url:      https://cryptopanic.com/news/rss/?currencies=TRX
+    language: en
+    category: 加密媒体
+    enabled:  true
+    skip_relevance_check: true
+
+  - name:     Messari
+    url:      https://messari.io/rss/news.xml
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     Chainalysis_Blog
+    url:      https://blog.chainalysis.com/feed/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  - name:     Glassnode_Insights
+    url:      https://insights.glassnode.com/rss/
+    language: en
+    category: 加密媒体
+    enabled:  true
+
+  # ── Chinese crypto media ─────────────────────────────────────────────────────
+  - name:     JinSeCaiJing
+    url:      https://www.jinse.cn/rss
     language: zh
     category: 中文加密媒体
     enabled:  true
 
-  - name:     JinSeCaiJing
-    url:      https://www.jinse.cn/rss
+  - name:     BlockBeats
+    url:      https://www.theblockbeats.info/rss
     language: zh
     category: 中文加密媒体
     enabled:  true
@@ -105,27 +180,39 @@ sources:
     category: 中文加密媒体
     enabled:  true
 
-  - name:     Bitpush
-    url:      https://www.bitpush.news/feed
+  - name:     Odaily
+    url:      https://www.odaily.news/rss
     language: zh
     category: 中文加密媒体
     enabled:  true
 
-  - name:     8BTC
-    url:      https://www.8btc.com/feed
+  - name:     ChainCatcher
+    url:      https://www.chaincatcher.com/rss
     language: zh
     category: 中文加密媒体
     enabled:  true
 
-  - name:     BlockTempo
-    url:      https://www.blocktempo.com/feed/
-    language: zh
-    category: 中文加密媒体
-    enabled:  true
-
-  # ── Mainstream media (via Google News search) ───────────────────────────────
-  - name:     Reuters_Tech
+  # ── Mainstream media via Google News ────────────────────────────────────────
+  - name:     Reuters_Crypto
     url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:reuters.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     Bloomberg_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:bloomberg.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     Forbes_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:forbes.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     CNBC_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+TRX+site:cnbc.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
     enabled:  true
@@ -136,8 +223,8 @@ sources:
     category: 主流媒体
     enabled:  true
 
-  - name:     Guardian_Crypto
-    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:theguardian.com&hl=en&gl=US&ceid=US:en
+  - name:     NYT_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:nytimes.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
     enabled:  true
@@ -148,8 +235,46 @@ sources:
     category: 主流媒体
     enabled:  true
 
-  - name:     Forbes_Crypto
-    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:forbes.com&hl=en&gl=US&ceid=US:en
+  - name:     Guardian_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:theguardian.com&hl=en&gl=US&ceid=US:en
     language: en
     category: 主流媒体
     enabled:  true
+
+  - name:     WSJ_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+Justin+Sun+site:wsj.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  - name:     FT_Crypto
+    url:      https://news.google.com/rss/search?q=TRON+cryptocurrency+site:ft.com&hl=en&gl=US&ceid=US:en
+    language: en
+    category: 主流媒体
+    enabled:  true
+
+  # ── YouTube channel RSS ──────────────────────────────────────────────────────
+  - name:     CoinBureau_YouTube
+    url:      https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw
+    language: en
+    category: YouTube
+    enabled:  true
+
+  - name:     CryptosRUs_YouTube
+    url:      https://www.youtube.com/feeds/videos.xml?channel_id=UCYkXBMwBErddjfJ2ATgaxmQ
+    language: en
+    category: YouTube
+    enabled:  true
+
+  - name:     AltcoinDaily_YouTube
+    url:      https://www.youtube.com/feeds/videos.xml?channel_id=UCbLhGKVY-bJPcawebgtNfbw
+    language: en
+    category: YouTube
+    enabled:  true
+
+  - name:     TRONDAO_YouTube
+    url:      https://www.youtube.com/feeds/videos.xml?channel_id=UC5OPOGRq02iK-0T9sKSe-kQ
+    language: en
+    category: YouTube
+    enabled:  true
+    skip_relevance_check: true
