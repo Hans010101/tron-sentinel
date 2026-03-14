@@ -36,7 +36,9 @@ import json
 import logging
 import os
 import sqlite3
+import sys
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -61,6 +63,7 @@ if _env_path.exists():
 ROOT      = Path(__file__).parent
 DB_PATH   = ROOT / "data"      / "sentinel.db"
 JSON_PATH = ROOT / "dashboard" / "data.json"
+LOG_PATH  = ROOT / "data"      / "pipeline.log"
 
 # ── Logging ────────────────────────────────────────────────────────────────────
 
@@ -70,6 +73,36 @@ logging.basicConfig(
     datefmt= "%H:%M:%S",
 )
 logger = logging.getLogger("sentinel.main")
+
+# ── Pipeline log tee ───────────────────────────────────────────────────────────
+
+class _Tee:
+    """
+    Wrap a stream (sys.stdout) so every write goes to both the original
+    stream and an append-mode log file simultaneously.
+    """
+    def __init__(self, stream, log_path: Path) -> None:
+        self._stream = stream
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = log_path.open("a", encoding="utf-8")
+
+    def write(self, data: str) -> int:
+        self._stream.write(data)
+        self._file.write(data)
+        return len(data)
+
+    def flush(self) -> None:
+        self._stream.flush()
+        self._file.flush()
+
+    def fileno(self) -> int:          # needed by some stdlib code
+        return self._stream.fileno()
+
+    def close(self) -> None:
+        self._file.close()
+
+    def __getattr__(self, name: str):  # forward everything else
+        return getattr(self._stream, name)
 
 # ── Step runner ────────────────────────────────────────────────────────────────
 
@@ -191,6 +224,12 @@ def do_collect_cryptopanic_api() -> dict:
     conn = open_db(DB_PATH)
     try:
         return collect_cryptopanic_api(conn)
+    except Exception as exc:
+        print(f"  [CryptoPanic API]  ✗ 采集异常: {type(exc).__name__}: {exc}")
+        print("  [CryptoPanic API]  完整堆栈:")
+        for line in traceback.format_exc().splitlines():
+            print(f"    {line}")
+        raise
     finally:
         conn.close()
 
@@ -820,6 +859,27 @@ def write_json(data: dict, path: Path = JSON_PATH) -> None:
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    # ── Tee stdout → data/pipeline.log (append) ────────────────────────────────
+    _orig_stdout = sys.stdout
+    _tee = _Tee(sys.stdout, LOG_PATH)
+    sys.stdout = _tee
+    # Write a run-separator so runs are easy to tell apart in the log file
+    _tee._file.write(
+        f"\n{'═' * 58}\n"
+        f"  RUN START: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"{'═' * 58}\n"
+    )
+    _tee._file.flush()
+
+    try:
+        _main_body()
+    finally:
+        sys.stdout = _orig_stdout
+        _tee.close()
+
+
+def _main_body() -> None:
+    """Inner pipeline body – called by main() after tee is installed."""
     t_start = time.perf_counter()
 
     print(f"\n{_SEP2}")
@@ -833,12 +893,18 @@ def main() -> None:
         print(f"\n{_SEP}")
         print("  [GCS]  从 Cloud Storage 下载最新数据库…")
         print(_SEP)
-        from utils.gcs_storage import download_db  # noqa: PLC0415
-        _downloaded = download_db(_gcs_bucket, DB_PATH)
-        if _downloaded:
-            print(f"  ✓  数据库已同步 (gs://{_gcs_bucket}/data/sentinel.db)")
-        else:
-            print("  –  GCS 无历史数据库，使用本地（或新建）")
+        try:
+            from utils.gcs_storage import download_db  # noqa: PLC0415
+            _downloaded = download_db(_gcs_bucket, DB_PATH)
+            if _downloaded:
+                _db_size = round(DB_PATH.stat().st_size / 1_048_576, 2)
+                print(f"  ✓  数据库已下载  {_db_size} MB  ← gs://{_gcs_bucket}/data/sentinel.db")
+            else:
+                print("  –  GCS 无历史数据库，将使用本地（或新建）")
+        except Exception as _exc:
+            print(f"  ✗  GCS 下载失败: {_exc}")
+            for _line in traceback.format_exc().splitlines():
+                print(f"     {_line}")
 
     step_ok: dict[str, bool] = {}
 
@@ -1073,12 +1139,18 @@ def main() -> None:
         print(f"\n{_SEP}")
         print("  [GCS]  上传数据库到 Cloud Storage…")
         print(_SEP)
-        from utils.gcs_storage import upload_db  # noqa: PLC0415
-        _uploaded = upload_db(_gcs_bucket, DB_PATH)
-        if _uploaded:
-            print(f"  ✓  数据库已上传 (gs://{_gcs_bucket}/data/sentinel.db)")
-        else:
-            print("  ✗  数据库上传失败（详见日志）")
+        try:
+            from utils.gcs_storage import upload_db  # noqa: PLC0415
+            _db_size_up = round(DB_PATH.stat().st_size / 1_048_576, 2) if DB_PATH.exists() else 0
+            _uploaded = upload_db(_gcs_bucket, DB_PATH)
+            if _uploaded:
+                print(f"  ✓  数据库已上传  {_db_size_up} MB  → gs://{_gcs_bucket}/data/sentinel.db")
+            else:
+                print("  ✗  数据库上传失败（详见日志）")
+        except Exception as _exc:
+            print(f"  ✗  GCS 上传异常: {_exc}")
+            for _line in traceback.format_exc().splitlines():
+                print(f"     {_line}")
 
     print()
 

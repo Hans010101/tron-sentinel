@@ -6,6 +6,7 @@ Cloud Run entry point for TRON Sentinel.
 Serves HTTP routes on $PORT (default 8080):
     GET /health      → 200 JSON  health report (scripts/health_check.py)
     GET /diagnose    → 200 text  full system diagnosis (scripts/diagnose.py)
+    GET /logs        → 200 text  last 200 lines of data/pipeline.log
     GET /            → 200 HTML  dashboard (dashboard/index.html)
     GET /data.json   → 200 JSON  latest dashboard data
                        Triggers a pipeline run on first request if
@@ -46,6 +47,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._serve_health()
         elif path == "/diagnose":
             self._serve_diagnose()
+        elif path == "/logs":
+            self._serve_logs()
         elif path == "/":
             self._serve_index()
         elif path == "/data.json":
@@ -90,6 +93,30 @@ class _Handler(BaseHTTPRequestHandler):
             body   = f"Diagnosis error: {exc}".encode("utf-8")
             status = 500
         self.send_response(status)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ------------------------------------------------------------------
+
+    def _serve_logs(self) -> None:
+        """Return the last 200 lines of data/pipeline.log as plain text."""
+        log_path = Path(__file__).parent / "data" / "pipeline.log"
+        if not log_path.exists():
+            body = (
+                "pipeline.log 尚不存在 – 流水线还未运行过。\n"
+                "首次运行后此文件将自动创建。"
+            ).encode("utf-8")
+        else:
+            try:
+                lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                body = "\n".join(lines[-200:]).encode("utf-8")
+            except Exception as exc:
+                logger.warning("Cannot read pipeline.log: %s", exc)
+                body = f"读取日志失败: {exc}".encode("utf-8")
+        self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")
@@ -209,7 +236,7 @@ def main() -> None:
 
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), _Handler)
-    logger.info("Serving on 0.0.0.0:%d  (health + /data.json + /diagnose)", port)
+    logger.info("Serving on 0.0.0.0:%d  (health + /data.json + /diagnose + /logs)", port)
     try:
         server.serve_forever()
     except (KeyboardInterrupt, SystemExit):
