@@ -65,7 +65,11 @@ def main() -> None:
 
 
 def _run_pipeline() -> None:
-    """Execute the full pipeline, catching all exceptions."""
+    """Execute the full pipeline, catching all exceptions.
+
+    GCS upload is handled inside main.main() at the end of the pipeline,
+    so it is automatically included in every scheduled run.
+    """
     try:
         import main as pipeline
         pipeline.main()
