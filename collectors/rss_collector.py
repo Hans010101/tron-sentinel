@@ -16,7 +16,7 @@ import html
 import logging
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Generator
 
@@ -393,7 +393,9 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
         logger.warning("[%s] Feed is malformed and has no entries: %s", source, exc)
         return
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    now_utc    = datetime.now(tz=timezone.utc)
+    cutoff_15d = now_utc - timedelta(days=15)
+    now_utc_s  = now_utc.isoformat()
 
     for entry in parsed.get("entries", []):
         link = getattr(entry, "link", None) or getattr(entry, "id", None)
@@ -408,14 +410,26 @@ def fetch_feed(feed_cfg: dict) -> Generator[dict, None, None]:
         if not _is_relevant(title):
             continue
 
+        published_at = _parse_published(entry)
+        # Skip entries older than 15 days
+        if published_at:
+            try:
+                pub_dt = datetime.fromisoformat(published_at)
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                if pub_dt < cutoff_15d:
+                    continue
+            except Exception:
+                pass
+
         yield {
             "title":        title,
             "link":         link,
-            "published_at": _parse_published(entry),
+            "published_at": published_at,
             "source":       source,
             "summary":      _get_summary(entry),
             "language":     lang,
-            "collected_at": now_utc,
+            "collected_at": now_utc_s,
         }
 
 

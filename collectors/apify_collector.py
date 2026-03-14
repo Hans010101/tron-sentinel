@@ -26,7 +26,7 @@ import sqlite3
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,21 @@ INSERT OR IGNORE INTO raw_articles
 VALUES
     (:title, :link, :published_at, :source, :summary, :language, :collected_at)
 """
+
+
+# ── Freshness helper ─────────────────────────────────────────────────────────
+
+def _is_fresh(published_at_str: str | None, cutoff: datetime) -> bool:
+    """Return True if the article is within the retention window."""
+    if not published_at_str:
+        return True
+    try:
+        dt = datetime.fromisoformat(published_at_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt >= cutoff
+    except Exception:
+        return True
 
 
 # ── Database ─────────────────────────────────────────────────────────────────
@@ -185,7 +200,9 @@ def collect_twitter(conn: sqlite3.Connection, token: str | None = None) -> int:
     items = _get_dataset_items(dataset_id, token, limit=50)
     logger.info("Twitter: fetched %d items from dataset", len(items))
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    _now = datetime.now(tz=timezone.utc)
+    now_utc = _now.isoformat()
+    _cutoff = _now - timedelta(days=15)
     inserted = 0
     cur = conn.cursor()
 
@@ -240,6 +257,8 @@ def collect_twitter(conn: sqlite3.Connection, token: str | None = None) -> int:
             "language": tweet.get("lang", "en"),
             "collected_at": now_utc,
         }
+        if not _is_fresh(row["published_at"], _cutoff):
+            continue
         cur.execute(_INSERT, row)
         inserted += cur.rowcount
 
@@ -306,7 +325,9 @@ def collect_google_news(conn: sqlite3.Connection,
     items = _get_dataset_items(dataset_id, token, limit=10)
     logger.info("Google: fetched %d search result pages", len(items))
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    _now = datetime.now(tz=timezone.utc)
+    now_utc = _now.isoformat()
+    _cutoff = _now - timedelta(days=15)
     inserted = 0
     cur = conn.cursor()
 
@@ -339,6 +360,8 @@ def collect_google_news(conn: sqlite3.Connection,
                 "language": "en",
                 "collected_at": now_utc,
             }
+            if not _is_fresh(row["published_at"], _cutoff):
+                continue
             cur.execute(_INSERT, row)
             inserted += cur.rowcount
 
@@ -377,7 +400,9 @@ def collect_youtube(conn: sqlite3.Connection, token: str | None = None) -> int:
     items = _get_dataset_items(dataset_id, token, limit=50)
     logger.info("YouTube: fetched %d items from dataset", len(items))
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    _now = datetime.now(tz=timezone.utc)
+    now_utc = _now.isoformat()
+    _cutoff = _now - timedelta(days=15)
     inserted = 0
     cur = conn.cursor()
 
@@ -412,6 +437,8 @@ def collect_youtube(conn: sqlite3.Connection, token: str | None = None) -> int:
             "language": "en",
             "collected_at": now_utc,
         }
+        if not _is_fresh(row["published_at"], _cutoff):
+            continue
         cur.execute(_INSERT, row)
         inserted += cur.rowcount
 
@@ -436,7 +463,9 @@ def collect_reddit(conn: sqlite3.Connection, token: str | None = None) -> int:
     Returns count of newly inserted rows.
     """
     token = token or _get_token()
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    _now = datetime.now(tz=timezone.utc)
+    now_utc = _now.isoformat()
+    _cutoff = _now - timedelta(days=15)
     inserted = 0
     cur = conn.cursor()
 
@@ -494,6 +523,8 @@ def collect_reddit(conn: sqlite3.Connection, token: str | None = None) -> int:
                 "language": "en",
                 "collected_at": now_utc,
             }
+            if not _is_fresh(row["published_at"], _cutoff):
+                continue
             cur.execute(_INSERT, row)
             inserted += cur.rowcount
 
@@ -528,7 +559,9 @@ def collect_tiktok(conn: sqlite3.Connection, token: str | None = None) -> int:
     items = _get_dataset_items(dataset_id, token, limit=50)
     logger.info("TikTok: fetched %d items from dataset", len(items))
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    _now = datetime.now(tz=timezone.utc)
+    now_utc = _now.isoformat()
+    _cutoff = _now - timedelta(days=15)
     inserted = 0
     cur = conn.cursor()
 
@@ -585,6 +618,8 @@ def collect_tiktok(conn: sqlite3.Connection, token: str | None = None) -> int:
             "language": "en",
             "collected_at": now_utc,
         }
+        if not _is_fresh(row["published_at"], _cutoff):
+            continue
         cur.execute(_INSERT, row)
         inserted += cur.rowcount
 
@@ -620,7 +655,9 @@ def collect_weibo(conn: sqlite3.Connection, token: str | None = None) -> int:
     items = _get_dataset_items(dataset_id, token, limit=100)
     logger.info("Weibo: fetched %d items from dataset", len(items))
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
+    _now = datetime.now(tz=timezone.utc)
+    now_utc = _now.isoformat()
+    _cutoff = _now - timedelta(days=15)
     inserted = 0
     cur = conn.cursor()
 
@@ -675,6 +712,8 @@ def collect_weibo(conn: sqlite3.Connection, token: str | None = None) -> int:
             "language": "zh",
             "collected_at": now_utc,
         }
+        if not _is_fresh(row["published_at"], _cutoff):
+            continue
         cur.execute(_INSERT, row)
         inserted += cur.rowcount
 

@@ -277,7 +277,7 @@ def do_send_daily_reports() -> int:
     return generate_and_send_all_reports(webhook_url)
 
 
-def do_cleanup_db(retention_days: int = 30) -> dict:
+def do_cleanup_db(retention_days: int = 15) -> dict:
     """
     Remove records older than *retention_days* from raw_articles and trend_data,
     then VACUUM the SQLite file to reclaim disk space.
@@ -424,9 +424,10 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         market           TRX price, change, market_cap, volume (CoinGecko)
                          + tvl (DeFiLlama)
     """
-    now       = datetime.now(timezone.utc)
-    today_pfx = now.strftime("%Y-%m-%d")
-    cutoff_24 = (now - timedelta(hours=24)).isoformat()
+    now        = datetime.now(timezone.utc)
+    today_pfx  = now.strftime("%Y-%m-%d")
+    cutoff_24  = (now - timedelta(hours=24)).isoformat()
+    cutoff_15d = (now - timedelta(days=15)).isoformat()
 
     # Ensure sentiment columns exist (added by sentiment analyzer when it runs)
     _ensure_sentiment_columns(conn)
@@ -439,8 +440,9 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
 
     label_rows   = conn.execute(
         "SELECT sentiment_label, COUNT(*) FROM raw_articles "
-        "WHERE  sentiment_label IS NOT NULL "
-        "GROUP  BY sentiment_label"
+        "WHERE  sentiment_label IS NOT NULL AND collected_at >= ? "
+        "GROUP  BY sentiment_label",
+        (cutoff_15d,),
     ).fetchall()
     label_counts: dict[str, int] = {r[0]: r[1] for r in label_rows}
     total_lbl    = sum(label_counts.values()) or 1
@@ -450,8 +452,8 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
 
     active_alerts = conn.execute(
         "SELECT COUNT(*) FROM raw_articles "
-        "WHERE  sentiment_label = 'negative' AND collected_at LIKE ?",
-        (today_pfx + "%",),
+        "WHERE  risk_score >= 60 AND collected_at >= ?",
+        (cutoff_15d,),
     ).fetchone()[0]
 
     # ── Sentiment trend – last 24 hourly slots ─────────────────────────────────
@@ -554,7 +556,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "price_history":  price_history,
     }
 
-    # ── Risk alerts (risk_score >= 60 in last 24h) ─────────────────────────
+    # ── Risk alerts (risk_score >= 60 in last 15 days) ────────────────────────
     risk_alerts: list[dict] = []
     existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(raw_articles)")}
     if "risk_score" in existing_cols:
@@ -572,8 +574,8 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
             f"{_extra_risk} "
             "FROM raw_articles "
             "WHERE risk_score >= 60 AND collected_at >= ? "
-            "ORDER BY risk_score DESC LIMIT 20",
-            (cutoff_24,),
+            "ORDER BY risk_score DESC LIMIT 100",
+            (cutoff_15d,),
         ).fetchall()
 
         for rr in risk_rows:
