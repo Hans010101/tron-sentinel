@@ -13,7 +13,7 @@ import json
 import logging
 import sqlite3
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -88,9 +88,11 @@ def collect_crypto_panic(conn: sqlite3.Connection) -> int:
     results = data.get("results", [])
     logger.info("CryptoPanic: fetched %d posts", len(results))
 
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
-    inserted = 0
-    cur = conn.cursor()
+    now_dt     = datetime.now(tz=timezone.utc)
+    now_utc    = now_dt.isoformat()
+    cutoff_15d = now_dt - timedelta(days=15)
+    inserted   = 0
+    cur        = conn.cursor()
 
     for post in results:
         title = post.get("title", "").strip()
@@ -104,6 +106,8 @@ def collect_crypto_panic(conn: sqlite3.Connection) -> int:
         if published:
             try:
                 dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                if dt < cutoff_15d:
+                    continue
                 published = dt.isoformat()
             except (ValueError, TypeError):
                 published = now_utc

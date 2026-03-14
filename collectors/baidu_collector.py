@@ -14,7 +14,7 @@ import sqlite3
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
@@ -116,19 +116,31 @@ def collect_baidu(conn: sqlite3.Connection) -> int:
     Run all Baidu News keyword searches and store results.
     Returns count of newly inserted rows.
     """
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
-    inserted = 0
-    cur = conn.cursor()
+    now_dt     = datetime.now(tz=timezone.utc)
+    now_utc    = now_dt.isoformat()
+    cutoff_15d = now_dt - timedelta(days=15)
+    inserted   = 0
+    cur        = conn.cursor()
 
     for keyword in _BAIDU_KEYWORDS:
         items = _fetch_baidu_rss(keyword)
         logger.info("Baidu '%s': fetched %d items", keyword, len(items))
 
         for item in items:
+            pub = item["published_at"]
+            if pub:
+                try:
+                    pub_dt = datetime.fromisoformat(pub)
+                    if pub_dt.tzinfo is None:
+                        pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                    if pub_dt < cutoff_15d:
+                        continue
+                except Exception:
+                    pass
             row = {
                 "title": item["title"],
                 "link": item["link"],
-                "published_at": item["published_at"] or now_utc,
+                "published_at": pub or now_utc,
                 "source": f"Baidu News ({keyword})",
                 "summary": item["description"],
                 "language": "zh",

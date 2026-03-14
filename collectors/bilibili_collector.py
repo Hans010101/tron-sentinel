@@ -14,7 +14,7 @@ import logging
 import sqlite3
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -113,9 +113,11 @@ def collect_bilibili(conn: sqlite3.Connection) -> int:
     Search Bilibili for TRON-related videos and store results.
     Returns count of newly inserted rows.
     """
-    now_utc = datetime.now(tz=timezone.utc).isoformat()
-    inserted = 0
-    cur = conn.cursor()
+    now_dt     = datetime.now(tz=timezone.utc)
+    now_utc    = now_dt.isoformat()
+    cutoff_15d = now_dt - timedelta(days=15)
+    inserted   = 0
+    cur        = conn.cursor()
 
     for keyword in _SEARCH_KEYWORDS:
         videos = _search_bilibili(keyword)
@@ -146,6 +148,8 @@ def collect_bilibili(conn: sqlite3.Connection) -> int:
             if pubdate and isinstance(pubdate, (int, float)):
                 try:
                     dt = datetime.fromtimestamp(pubdate, tz=timezone.utc)
+                    if dt < cutoff_15d:
+                        continue
                     published_at = dt.isoformat()
                 except (ValueError, OSError):
                     pass

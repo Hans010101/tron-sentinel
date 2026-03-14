@@ -508,6 +508,29 @@
       font-size: 11px; color: var(--text-3); min-width: 28px;
     }
 
+    /* PAGINATION */
+    .pagination {
+      display: flex; align-items: center; justify-content: center;
+      gap: 10px; margin-top: 14px;
+    }
+    .pagination button {
+      font-size: 12px; font-weight: 600;
+      padding: 5px 16px; border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card); color: var(--text-1);
+      cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .pagination button:hover:not(:disabled) {
+      border-color: var(--primary); color: var(--primary);
+    }
+    .pagination button:disabled {
+      opacity: 0.38; cursor: not-allowed;
+    }
+    .pagination-info {
+      font-size: 12px; color: var(--text-3);
+      white-space: nowrap;
+    }
+
     /* FOOTER */
     footer {
       text-align: center; padding: 16px 36px 20px;
@@ -558,18 +581,7 @@
 
 <main>
 
-  <!-- RISK ALERT PANEL -->
-  <div class="section-label">风险预警</div>
-  <div class="risk-panel" id="riskPanel">
-    <div class="card-head">
-      <div class="card-title" style="color:var(--red)">实时风险预警</div>
-      <span class="badge" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,0.3)" id="badge-risk">-- 条</span>
-    </div>
-    <div class="card-sub">最近24小时风险分数 ≥60 的文章（越高越危险）</div>
-    <div id="riskList"></div>
-  </div>
-
-  <!-- OVERVIEW -->
+  <!-- 1. OVERVIEW -->
   <div class="section-label">舆情概览</div>
   <div class="overview-grid">
     <div class="stat-card">
@@ -580,26 +592,76 @@
     <div class="stat-card c-green">
       <div class="stat-label">正面占比</div>
       <div class="stat-value c-green" id="stat-pos">--</div>
-      <div class="stat-hint">情绪分析结果</div>
+      <div class="stat-hint">过去 15 天</div>
     </div>
     <div class="stat-card c-red">
       <div class="stat-label">负面占比</div>
       <div class="stat-value c-red" id="stat-neg">--</div>
-      <div class="stat-hint">情绪分析结果</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">中性占比</div>
-      <div class="stat-value" id="stat-neu">--</div>
-      <div class="stat-hint">情绪分析结果</div>
+      <div class="stat-hint">过去 15 天</div>
     </div>
     <div class="stat-card c-orange">
+      <div class="stat-label">中性占比</div>
+      <div class="stat-value c-orange" id="stat-neu">--</div>
+      <div class="stat-hint">过去 15 天</div>
+    </div>
+    <div class="stat-card c-blue">
       <div class="stat-label">活跃预警</div>
-      <div class="stat-value c-orange" id="stat-alerts">--</div>
-      <div class="stat-hint">今日负面预警数</div>
+      <div class="stat-value c-blue" id="stat-alerts">--</div>
+      <div class="stat-hint">高风险条目</div>
     </div>
   </div>
 
-  <!-- ANOMALY INDICATORS -->
+  <!-- 2. AI ANALYSIS STATS -->
+  <div class="section-label">AI 分析概览</div>
+  <div class="ai-grid">
+    <div class="ai-stat-card">
+      <div class="ai-stat-title">LLM 分析覆盖</div>
+      <div class="ai-stat-big" id="ai-coverage">--</div>
+      <div class="ai-stat-sub" id="ai-coverage-sub">已分析 / 总文章</div>
+    </div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-title">板块分布</div>
+      <div id="sectorDist"></div>
+    </div>
+    <div class="ai-stat-card">
+      <div class="ai-stat-title">内容分类</div>
+      <div id="categoryDist"></div>
+    </div>
+  </div>
+
+  <!-- 3. PLATFORM MAP -->
+  <div class="section-label">舆情地图</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">按平台统计</div>
+      <span class="badge badge-live">全量</span>
+    </div>
+    <div class="card-sub">各平台文章数量及情感分布</div>
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--yellow)"></div>中性</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>负面</div>
+    </div>
+    <div id="platformChart"></div>
+  </div>
+
+  <!-- 4. 24H SENTIMENT CHART -->
+  <div class="section-label">情绪趋势</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">24 小时情绪分布</div>
+      <span class="badge badge-live">实时</span>
+    </div>
+    <div class="card-sub">过去 24 小时正面 / 负面 / 中性情绪占比变化</div>
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>负面</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--indigo)"></div>中性</div>
+    </div>
+    <canvas id="sentimentChart" style="width:100%;height:240px"></canvas>
+  </div>
+
+  <!-- 5. ANOMALY + 7-DAY TRENDS + HOT KEYWORDS -->
   <div id="anomalySection" style="display:none">
     <div class="section-label">异常检测</div>
     <div class="card" style="border-color:var(--red)">
@@ -612,7 +674,6 @@
     </div>
   </div>
 
-  <!-- 7-DAY TREND -->
   <div class="section-label">7天趋势</div>
   <div class="trend-grid">
     <div class="card">
@@ -641,7 +702,6 @@
     </div>
   </div>
 
-  <!-- HOT KEYWORDS -->
   <div class="section-label">热词排行</div>
   <div class="card">
     <div class="card-head">
@@ -652,48 +712,14 @@
     <div class="kw-list" id="hotKeywords"></div>
   </div>
 
-  <!-- AI ANALYSIS STATS -->
-  <div class="section-label">AI 分析概览</div>
-  <div class="ai-grid">
-    <div class="ai-stat-card">
-      <div class="ai-stat-title">LLM 分析覆盖</div>
-      <div class="ai-stat-big" id="ai-coverage">--</div>
-      <div class="ai-stat-sub" id="ai-coverage-sub">已分析 / 总文章</div>
-    </div>
-    <div class="ai-stat-card">
-      <div class="ai-stat-title">板块分布</div>
-      <div id="sectorDist"></div>
-    </div>
-    <div class="ai-stat-card">
-      <div class="ai-stat-title">内容分类</div>
-      <div id="categoryDist"></div>
-    </div>
-  </div>
-
-  <!-- PLATFORM MAP -->
-  <div class="section-label">舆情地图</div>
-  <div class="card">
-    <div class="card-head">
-      <div class="card-title">按平台统计</div>
-      <span class="badge badge-live">全量</span>
-    </div>
-    <div class="card-sub">各平台文章数量及情感分布</div>
-    <div class="chart-legend">
-      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:var(--yellow)"></div>中性</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>负面</div>
-    </div>
-    <div id="platformChart"></div>
-  </div>
-
-  <!-- NEWS LIST -->
-  <div class="section-label">最新动态</div>
+  <!-- 6. NEWS LIST -->
+  <div class="section-label" id="newsSection">最新动态</div>
   <div class="card">
     <div class="card-head">
       <div class="card-title">新闻 / 推文</div>
       <span class="badge badge-live">实时</span>
     </div>
-    <div class="card-sub">最新采集的 TRON / Justin Sun 相关内容（点击跳转原文）</div>
+    <div class="card-sub">最近 15 天 TRON / Justin Sun 相关内容（点击跳转原文）</div>
     <div class="news-controls">
       <select id="filterSector" title="按板块筛选">
         <option value="">全部板块</option>
@@ -705,25 +731,30 @@
       </select>
     </div>
     <div class="news-list" id="newsList"></div>
+    <div class="pagination" id="newsPagination">
+      <button id="newsPrev" onclick="changeNewsPage(-1)">&#8249; 上一页</button>
+      <span class="pagination-info" id="newsPageInfo">第 1 / 1 页</span>
+      <button id="newsNext" onclick="changeNewsPage(1)">下一页 &#8250;</button>
+    </div>
   </div>
 
-  <!-- SENTIMENT CHART -->
-  <div class="section-label">情绪趋势</div>
-  <div class="card">
+  <!-- 7. RISK ALERT PANEL -->
+  <div class="section-label" id="riskSection">风险预警</div>
+  <div class="risk-panel" id="riskPanel">
     <div class="card-head">
-      <div class="card-title">24 小时情绪分布</div>
-      <span class="badge badge-live">实时</span>
+      <div class="card-title" style="color:var(--red)">实时风险预警</div>
+      <span class="badge" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(220,38,38,0.3)" id="badge-risk">-- 条</span>
     </div>
-    <div class="card-sub">过去 24 小时正面 / 负面 / 中性情绪占比变化</div>
-    <div class="chart-legend">
-      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div>正面</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div>负面</div>
-      <div class="legend-item"><div class="legend-swatch" style="background:var(--indigo)"></div>中性</div>
+    <div class="card-sub">风险分数 ≥60 的内容（最近 15 天，越高越危险）</div>
+    <div id="riskList"></div>
+    <div class="pagination" id="riskPagination">
+      <button id="riskPrev" onclick="changeRiskPage(-1)">&#8249; 上一页</button>
+      <span class="pagination-info" id="riskPageInfo">第 1 / 1 页</span>
+      <button id="riskNext" onclick="changeRiskPage(1)">下一页 &#8250;</button>
     </div>
-    <canvas id="sentimentChart" style="width:100%;height:240px"></canvas>
   </div>
 
-  <!-- MARKET -->
+  <!-- 8. MARKET -->
   <div class="section-label">市场参考</div>
   <div class="market-grid">
     <div class="market-card">
@@ -918,23 +949,87 @@ function updateOverview() {
   if ($('stat-alerts')) $('stat-alerts').textContent = o.active_alerts ?? 0;
 }
 
+/* ── 15-DAY FRESHNESS FILTER ────────────────────────────── */
+
+const _FIFTEEN_DAYS_MS = 15 * 24 * 60 * 60 * 1000;
+
+function _isWithin15Days(item) {
+  if (item.published_at) {
+    try {
+      const dt = new Date(item.published_at);
+      if (!isNaN(dt)) return (Date.now() - dt.getTime()) <= _FIFTEEN_DAYS_MS;
+    } catch (e) { /* fall through */ }
+  }
+  if (item.time_ago) {
+    const m = item.time_ago.match(/(\d+)\s*d/i);
+    if (m) return parseInt(m[1], 10) <= 15;
+    if (/\d+\s*(h|m)/i.test(item.time_ago)) return true;
+  }
+  return true;
+}
+
+/* ── PAGINATION STATE ───────────────────────────────────── */
+
+const _PAGE_SIZE = 10;
+let _newsPage = 1;
+let _riskPage = 1;
+let _newsItems = [];
+let _riskItems = [];
+
+function _updateNewsPagination() {
+  const totalPages = Math.max(1, Math.ceil(_newsItems.length / _PAGE_SIZE));
+  const info = document.getElementById('newsPageInfo');
+  const prev = document.getElementById('newsPrev');
+  const next = document.getElementById('newsNext');
+  if (info) info.textContent = '\u7b2c ' + _newsPage + ' / ' + totalPages + ' \u9875';
+  if (prev) prev.disabled = _newsPage <= 1;
+  if (next) next.disabled = _newsPage >= totalPages;
+  const pg = document.getElementById('newsPagination');
+  if (pg) pg.style.display = totalPages <= 1 ? 'none' : 'flex';
+}
+
+function _updateRiskPagination() {
+  const totalPages = Math.max(1, Math.ceil(_riskItems.length / _PAGE_SIZE));
+  const info = document.getElementById('riskPageInfo');
+  const prev = document.getElementById('riskPrev');
+  const next = document.getElementById('riskNext');
+  if (info) info.textContent = '\u7b2c ' + _riskPage + ' / ' + totalPages + ' \u9875';
+  if (prev) prev.disabled = _riskPage <= 1;
+  if (next) next.disabled = _riskPage >= totalPages;
+  const pg = document.getElementById('riskPagination');
+  if (pg) pg.style.display = totalPages <= 1 ? 'none' : 'flex';
+}
+
+function changeNewsPage(delta) {
+  const totalPages = Math.max(1, Math.ceil(_newsItems.length / _PAGE_SIZE));
+  _newsPage = Math.max(1, Math.min(totalPages, _newsPage + delta));
+  _renderNewsPage();
+  const sec = document.getElementById('newsSection');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function changeRiskPage(delta) {
+  const totalPages = Math.max(1, Math.ceil(_riskItems.length / _PAGE_SIZE));
+  _riskPage = Math.max(1, Math.min(totalPages, _riskPage + delta));
+  _renderRiskPage();
+  const sec = document.getElementById('riskSection');
+  if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 /* ── RISK PANEL ─────────────────────────────────────────── */
 
-function renderRiskPanel() {
+function _renderRiskPage() {
   const el = document.getElementById('riskList');
-  const badge = document.getElementById('badge-risk');
   if (!el) return;
-  const items = DATA.risk_alerts || [];
-  if (badge) badge.textContent = items.length + ' 条';
+  const start = (_riskPage - 1) * _PAGE_SIZE;
+  const page  = _riskItems.slice(start, start + _PAGE_SIZE);
 
-  if (!items.length) {
-    el.innerHTML = '<p style="color:var(--green);font-size:13px;padding:12px 0">✅ 暂无高风险预警</p>';
-    const panel = document.getElementById('riskPanel');
-    if (panel) panel.style.borderColor = 'var(--green)';
+  if (!page.length) {
+    el.innerHTML = '<p style="color:var(--green);font-size:13px;padding:12px 0">\u2705 \u6682\u65e0\u9ad8\u98ce\u9669\u9884\u8b66</p>';
     return;
   }
 
-  el.innerHTML = items.map(a => {
+  el.innerHTML = page.map(a => {
     const score = a.risk_score || 0;
     const color = _riskColor(score);
     const isCritical = score >= 80;
@@ -942,7 +1037,6 @@ function renderRiskPanel() {
     const summary = a.llm_summary_zh ? `<div class="risk-summary">${_esc(a.llm_summary_zh)}</div>` : '';
     const sectorTag = a.llm_sector ? `<span class="sector-tag ${_sectorClass(a.llm_sector)}">${_esc(a.llm_sector)}</span>` : '';
     const riskLabel = a.llm_risk_level ? a.llm_risk_level.toUpperCase() : (score >= 80 ? 'CRITICAL' : score >= 60 ? 'HIGH' : 'MEDIUM');
-
     return `<a class="risk-item ${isCritical ? 'risk-critical' : ''}" href="${_esc(a.link || '#')}" target="_blank" rel="noopener">
       <div class="risk-bar">
         <div class="risk-score-num" style="color:${color}">${score}</div>
@@ -959,6 +1053,26 @@ function renderRiskPanel() {
       </div>
     </a>`;
   }).join('');
+  _updateRiskPagination();
+}
+
+function renderRiskPanel() {
+  const badge = document.getElementById('badge-risk');
+  _riskItems = (DATA.risk_alerts || []).filter(_isWithin15Days);
+  if (badge) badge.textContent = _riskItems.length + ' \u6761';
+
+  const panel = document.getElementById('riskPanel');
+  if (!_riskItems.length) {
+    const el = document.getElementById('riskList');
+    if (el) el.innerHTML = '<p style="color:var(--green);font-size:13px;padding:12px 0">\u2705 \u6682\u65e0\u9ad8\u98ce\u9669\u9884\u8b66</p>';
+    if (panel) panel.style.borderColor = 'var(--green)';
+    const pg = document.getElementById('riskPagination');
+    if (pg) pg.style.display = 'none';
+    return;
+  }
+  if (panel) panel.style.borderColor = '';
+  _riskPage = 1;
+  _renderRiskPage();
 }
 
 /* ── AI STATS ───────────────────────────────────────────── */
@@ -1054,12 +1168,49 @@ function renderPlatformChart() {
 let _currentSectorFilter = '';
 let _currentRiskSort = '';
 
-function renderNews() {
+function _buildNewsItem(a) {
+  const srcTag = _sourceTag(a.source);
+  const score = a.sentiment_score ?? a.score ?? 0;
+  const scoreColor = score < -0.2 ? 'var(--red)' : score > 0.2 ? 'var(--green)' : 'var(--text-2)';
+  const riskScore = a.risk_score;
+  let riskBadge = '';
+  if (riskScore != null) {
+    riskBadge = `<div class="news-risk-badge" style="color:${_riskColor(riskScore)};background:${_riskBg(riskScore)}">${riskScore}</div>`;
+  }
+  const sectorTag = a.llm_sector ? `<span class="sector-tag ${_sectorClass(a.llm_sector)}" style="margin-right:4px">${_esc(a.llm_sector)}</span>` : '';
+  const summaryLine = a.llm_summary_zh ? `<div class="news-llm-summary">${_esc(a.llm_summary_zh)}</div>` : '';
+  return `<a class="news-item" href="${_esc(a.link || '#')}" target="_blank" rel="noopener">
+    ${riskBadge}
+    ${srcTag}
+    ${sectorTag}
+    <div class="news-content">
+      <div class="news-title">${_esc(a.title)}</div>
+      ${summaryLine}
+    </div>
+    <div class="news-score" style="color:${scoreColor}">${score.toFixed(2)}</div>
+    <div class="news-time">${_esc(a.time_ago || '')}</div>
+  </a>`;
+}
+
+function _renderNewsPage() {
   const el = document.getElementById('newsList');
   if (!el) return;
+  const start = (_newsPage - 1) * _PAGE_SIZE;
+  const page  = _newsItems.slice(start, start + _PAGE_SIZE);
+  if (!page.length) {
+    el.innerHTML = '<p style="color:var(--text-3);font-size:13px;padding:12px 0">\u6682\u65e0\u65b0\u95fb</p>';
+  } else {
+    el.innerHTML = page.map(_buildNewsItem).join('');
+  }
+  _updateNewsPagination();
+}
 
+function renderNews() {
   // Use risk_alerts as the main news source (richer data), fall back to alerts
   let items = (DATA.risk_alerts && DATA.risk_alerts.length) ? [...DATA.risk_alerts] : [...(DATA.alerts || [])];
+
+  // 15-day freshness filter
+  items = items.filter(_isWithin15Days);
 
   // Sector filter
   if (_currentSectorFilter) {
@@ -1073,38 +1224,9 @@ function renderNews() {
     items.sort((a, b) => (a.risk_score || 0) - (b.risk_score || 0));
   }
 
-  if (!items.length) {
-    el.innerHTML = '<p style="color:var(--text-3);font-size:13px;padding:12px 0">暂无新闻</p>';
-    return;
-  }
-
-  el.innerHTML = items.map(a => {
-    const srcTag = _sourceTag(a.source);
-    const score = a.sentiment_score ?? a.score ?? 0;
-    const scoreColor = score < -0.2 ? 'var(--red)' : score > 0.2 ? 'var(--green)' : 'var(--text-2)';
-
-    const riskScore = a.risk_score;
-    let riskBadge = '';
-    if (riskScore != null) {
-      riskBadge = `<div class="news-risk-badge" style="color:${_riskColor(riskScore)};background:${_riskBg(riskScore)}">${riskScore}</div>`;
-    }
-
-    const sectorTag = a.llm_sector ? `<span class="sector-tag ${_sectorClass(a.llm_sector)}" style="margin-right:4px">${_esc(a.llm_sector)}</span>` : '';
-
-    const summaryLine = a.llm_summary_zh ? `<div class="news-llm-summary">${_esc(a.llm_summary_zh)}</div>` : '';
-
-    return `<a class="news-item" href="${_esc(a.link || '#')}" target="_blank" rel="noopener">
-      ${riskBadge}
-      ${srcTag}
-      ${sectorTag}
-      <div class="news-content">
-        <div class="news-title">${_esc(a.title)}</div>
-        ${summaryLine}
-      </div>
-      <div class="news-score" style="color:${scoreColor}">${score.toFixed(2)}</div>
-      <div class="news-time">${_esc(a.time_ago || '')}</div>
-    </a>`;
-  }).join('');
+  _newsItems = items;
+  _newsPage = 1;
+  _renderNewsPage();
 }
 
 function populateSectorFilter() {
