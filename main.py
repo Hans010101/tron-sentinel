@@ -12,17 +12,18 @@ Executes in order:
     Step 6   Apify TikTok            collectors/apify_collector.py
     Step 7   Apify Weibo             collectors/apify_collector.py
     Step 8   Bilibili Search         collectors/bilibili_collector.py
-    Step 9   CoinGecko market data   collectors/coingecko_collector.py
-    Step 10  DeFiLlama TVL data      collectors/defillama_collector.py
-    Step 11  Baidu News RSS          collectors/baidu_collector.py
-    Step 12  CryptoPanic API         collectors/crypto_panic_collector.py
-    Step 13  Sentiment Analysis      analyzers/sentiment_analyzer.py
-    Step 14  LLM Deep Analysis       analyzers/llm_analyzer.py
-    Step 15  Risk Scoring            analyzers/risk_scorer.py
-    Step 16  Instant Alerts          alerting/instant_alert.py
-    Step 17  Trend Analysis          analyzers/trend_analyzer.py
-    Step 18  Daily Reports           reporters/daily_report.py
-    Step 19  Data Cleanup            (inline – SQLite VACUUM)
+    Step 9   TwitterAPI.io           collectors/twitterapi_collector.py
+    Step 10  CoinGecko market data   collectors/coingecko_collector.py
+    Step 11  DeFiLlama TVL data      collectors/defillama_collector.py
+    Step 12  Baidu News RSS          collectors/baidu_collector.py
+    Step 13  CryptoPanic API         collectors/crypto_panic_collector.py
+    Step 14  Sentiment Analysis      analyzers/sentiment_analyzer.py
+    Step 15  LLM Deep Analysis       analyzers/llm_analyzer.py
+    Step 16  Risk Scoring            analyzers/risk_scorer.py
+    Step 17  Instant Alerts          alerting/instant_alert.py
+    Step 18  Trend Analysis          analyzers/trend_analyzer.py
+    Step 19  Daily Reports           reporters/daily_report.py
+    Step 20  Data Cleanup            (inline – SQLite VACUUM)
 
 Then queries the populated SQLite database and writes
 dashboard/data.json so the live dashboard can display real data.
@@ -74,7 +75,7 @@ logger = logging.getLogger("sentinel.main")
 
 _SEP        = "─" * 58
 _SEP2       = "═" * 58
-_TOTAL_STEPS = 19         # update when adding / removing pipeline steps
+_TOTAL_STEPS = 20         # update when adding / removing pipeline steps
 
 
 def run_step(num: int, label: str, fn, *args, **kwargs):
@@ -180,6 +181,16 @@ def do_collect_bilibili() -> int:
     conn = open_db(DB_PATH)
     try:
         return collect_bilibili(conn)
+    finally:
+        conn.close()
+
+
+def do_collect_twitterapi() -> int:
+    """twitterapi.io Advanced Search collector → returns count of newly inserted tweets."""
+    from collectors.twitterapi_collector import open_db, collect_twitterapi  # noqa: PLC0415
+    conn = open_db(DB_PATH)
+    try:
+        return collect_twitterapi(conn)
     finally:
         conn.close()
 
@@ -632,6 +643,11 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         ]
 
     # ── Platform stats (article count + sentiment by platform) ───────────
+    # Count twitterapi.io tweets (source stored as "Twitter/X (@username)")
+    _twitterapi_count = conn.execute(
+        "SELECT COUNT(*) FROM raw_articles WHERE source LIKE 'Twitter/X (%'"
+    ).fetchone()[0]
+
     _platform_sources = {
         "Twitter/X": ["apify_twitter"],
         "Reddit":    ["apify_reddit"],
@@ -642,14 +658,25 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
         "RSS新闻":   [
             "CoinDesk", "CoinTelegraph", "Decrypt", "TheBlock", "Blockworks",
             "BitcoinMagazine", "DLNews", "Protos", "TheDefiant",
+            "CryptoNews", "NewsBTC", "BitcoinNews", "CryptoBriefing",
+            "TronWeekly", "CryptoPanic_RSS", "Messari", "Chainalysis_Blog",
+            "Glassnode_Insights",
             "BlockBeats", "JinSeCaiJing", "PANews", "ShenChaoTechFlow",
-            "Bitpush", "8BTC", "BlockTempo", "GoogleNews_TRON",
-            "GoogleNews_JustinSun", "Reuters_Tech", "BBC_Crypto",
-            "Guardian_Crypto", "SCMP_Crypto", "Forbes_Crypto",
+            "Odaily", "ChainCatcher",
+            "Bitpush", "8BTC", "BlockTempo",
+            "GoogleNews_TRON_TRX", "GoogleNews_JustinSun", "GoogleNews_JustinSun_CN",
+            "GoogleNews_TRON_Blockchain", "GoogleNews_TRX_Crypto", "GoogleNews_USDT_TRON",
+            "Reuters_Crypto", "Bloomberg_Crypto", "Forbes_Crypto", "CNBC_Crypto",
+            "BBC_Crypto", "NYT_Crypto", "SCMP_Crypto", "Guardian_Crypto",
+            "WSJ_Crypto", "FT_Crypto",
+            "CoinBureau_YouTube", "CryptosRUs_YouTube", "AltcoinDaily_YouTube",
+            "TRONDAO_YouTube",
             "baidu_news", "crypto_panic", "apify_google",
         ],
     }
     platform_stats: list[dict] = []
+    # Inject twitterapi.io tweets into the Twitter/X platform bucket
+    _twitterapi_injected = False
     for platform_name, sources in _platform_sources.items():
         placeholders = ",".join(["?"] * len(sources))
         p_total = conn.execute(
@@ -669,10 +696,15 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
                 if lbl_name == "positive": p_pos = val
                 elif lbl_name == "negative": p_neg = val
                 else: p_neu = val
-        platform_stats.append({
+        stat = {
             "name": platform_name, "total": p_total,
             "positive": p_pos, "negative": p_neg, "neutral": p_neu,
-        })
+        }
+        # Merge twitterapi.io tweets into Twitter/X bucket
+        if platform_name == "Twitter/X" and _twitterapi_count:
+            stat["total"] += _twitterapi_count
+            _twitterapi_injected = True
+        platform_stats.append(stat)
 
     # ── Trend data (from trend_data table, written by trend_analyzer) ────────
     trends: dict = {
@@ -768,7 +800,7 @@ def main() -> None:
     step_ok: dict[str, bool] = {}
 
     # ── Step 1: RSS collection ─────────────────────────────────────────────────
-    val, ok = run_step(1, "RSS 新闻采集（24源：CoinDesk / TheBlock / Blockworks / 金色财经 / PANews 等）",
+    val, ok = run_step(1, "RSS 新闻采集（50+源：CoinDesk / TheBlock / Blockworks / 金色财经 / PANews 等）",
                        do_collect_rss)
     step_ok["rss"] = ok
     if ok:
@@ -823,8 +855,15 @@ def main() -> None:
     if ok:
         print(f"     新增视频 : {val} 条")
 
-    # ── Step 9: CoinGecko market data ─────────────────────────────────────────
-    val, ok = run_step(9, "CoinGecko TRX 市场数据", do_collect_coingecko)
+    # ── Step 9: TwitterAPI.io ─────────────────────────────────────────────────
+    val, ok = run_step(9, "TwitterAPI.io 热门推文采集（TRON / TRX / Justin Sun）",
+                       do_collect_twitterapi)
+    step_ok["twitterapi"] = ok
+    if ok:
+        print(f"     新增推文 : {val} 条")
+
+    # ── Step 10: CoinGecko market data ────────────────────────────────────────
+    val, ok = run_step(10, "CoinGecko TRX 市场数据", do_collect_coingecko)
     step_ok["coingecko"] = ok
     if ok and val:
         try:
@@ -841,8 +880,8 @@ def main() -> None:
         except Exception:
             pass
 
-    # ── Step 10: DeFiLlama TVL ────────────────────────────────────────────────
-    val, ok = run_step(10, "DeFiLlama TRON TVL 数据", do_collect_defillama)
+    # ── Step 11: DeFiLlama TVL ────────────────────────────────────────────────
+    val, ok = run_step(11, "DeFiLlama TRON TVL 数据", do_collect_defillama)
     step_ok["defillama"] = ok
     if ok and val:
         try:
@@ -857,50 +896,50 @@ def main() -> None:
         except Exception:
             pass
 
-    # ── Step 11: Baidu News ─────────────────────────────────────────────────
-    val, ok = run_step(11, "百度新闻采集（波场 / 孙宇晨）",
+    # ── Step 12: Baidu News ─────────────────────────────────────────────────
+    val, ok = run_step(12, "百度新闻采集（波场 / 孙宇晨）",
                        do_collect_baidu)
     step_ok["baidu"] = ok
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 12: CryptoPanic ────────────────────────────────────────────────
-    val, ok = run_step(12, "CryptoPanic TRX 新闻采集",
+    # ── Step 13: CryptoPanic ────────────────────────────────────────────────
+    val, ok = run_step(13, "CryptoPanic TRX 新闻采集",
                        do_collect_crypto_panic)
     step_ok["crypto_panic"] = ok
     if ok:
         print(f"     新增文章 : {val} 条")
 
-    # ── Step 13: Sentiment Analysis ───────────────────────────────────────
-    val, ok = run_step(13, "情绪分析（关键词分类）",
+    # ── Step 14: Sentiment Analysis ───────────────────────────────────────
+    val, ok = run_step(14, "情绪分析（关键词分类）",
                        do_analyze_sentiment)
     step_ok["sentiment"] = ok
     if ok:
         print(f"     已分析   : {val} 条")
 
-    # ── Step 14: LLM Deep Analysis (Deepseek) ─────────────────────────────
-    val, ok = run_step(14, "LLM 深度分析（Deepseek API）",
+    # ── Step 15: LLM Deep Analysis (Deepseek) ─────────────────────────────
+    val, ok = run_step(15, "LLM 深度分析（Deepseek API）",
                        do_llm_analyze)
     step_ok["llm_analyze"] = ok
     if ok:
         print(f"     已分析   : {val} 篇")
 
-    # ── Step 15: Risk Scoring ───────────────────────────────────────────
-    val, ok = run_step(15, "综合风险评分（0-100）",
+    # ── Step 16: Risk Scoring ───────────────────────────────────────────
+    val, ok = run_step(16, "综合风险评分（0-100）",
                        do_risk_score)
     step_ok["risk_score"] = ok
     if ok:
         print(f"     高危文章 : {val} 篇 (≥80分)")
 
-    # ── Step 16: Instant Alerts ──────────────────────────────────────────
-    val, ok = run_step(16, "即时告警推送（飞书 Webhook）",
+    # ── Step 17: Instant Alerts ──────────────────────────────────────────
+    val, ok = run_step(17, "即时告警推送（飞书 Webhook）",
                        do_instant_alerts)
     step_ok["instant_alerts"] = ok
     if ok:
         print(f"     已推送   : {val} 条告警")
 
-    # ── Step 17: Trend Analysis ───────────────────────────────────────────
-    val, ok = run_step(17, "趋势分析（7天声量 / 情感 / 热词 / 异常检测）",
+    # ── Step 18: Trend Analysis ───────────────────────────────────────────
+    val, ok = run_step(18, "趋势分析（30天声量 / 情感 / 热词 / 异常检测）",
                        do_analyze_trends)
     step_ok["trend_analysis"] = ok
     if ok and isinstance(val, dict):
@@ -913,15 +952,15 @@ def main() -> None:
         else:
             print("     无异常检测")
 
-    # ── Step 18: Daily Reports (Feishu Webhook) ───────────────────────────
-    val, ok = run_step(18, "生成并发送日报（飞书 Webhook）",
+    # ── Step 19: Daily Reports (Feishu Webhook) ───────────────────────────
+    val, ok = run_step(19, "生成并发送日报（飞书 Webhook）",
                        do_send_daily_reports)
     step_ok["daily_reports"] = ok
     if ok:
         print(f"     已发送   : {val}/3 份日报")
 
-    # ── Step 19: Data Cleanup ──────────────────────────────────────────────
-    val, ok = run_step(19, "数据清理（删除30天前记录 + VACUUM 压缩）",
+    # ── Step 20: Data Cleanup ──────────────────────────────────────────────
+    val, ok = run_step(20, "数据清理（删除30天前记录 + VACUUM 压缩）",
                        do_cleanup_db)
     step_ok["cleanup"] = ok
     if ok and isinstance(val, dict) and not val.get("skipped"):
