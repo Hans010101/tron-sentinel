@@ -124,10 +124,25 @@ def _fetch_posts(params: str) -> list[dict]:
             data = json.loads(resp.read().decode("utf-8"))
         return data.get("results", [])
     except urllib.error.HTTPError as exc:
-        logger.warning("CryptoPanic API HTTP %s for params=%s", exc.code, params)
+        body_snippet = ""
+        try:
+            body_snippet = exc.read().decode("utf-8", errors="replace")[:300]
+        except Exception:
+            pass
+        logger.warning(
+            "CryptoPanic API HTTP %s for params=%s  body=%s",
+            exc.code, params, body_snippet,
+        )
+        print(
+            f"  [CryptoPanic API]  HTTP {exc.code} {exc.reason} "
+            f"(params={params[:60]})"
+        )
+        if body_snippet:
+            print(f"  [CryptoPanic API]  响应内容: {body_snippet}")
         return []
     except Exception as exc:
         logger.warning("CryptoPanic API fetch failed (%s): %s", params, exc)
+        print(f"  [CryptoPanic API]  请求失败 (params={params[:60]}): {exc}")
         return []
 
 

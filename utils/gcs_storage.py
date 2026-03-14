@@ -71,7 +71,7 @@ def download_db(bucket_name: str, local_path: Path) -> bool:
         return True
 
     except Exception as exc:
-        logger.warning("GCS: download failed (bucket=%s): %s", bucket_name, exc)
+        logger.exception("GCS: download failed (bucket=%s): %s", bucket_name, exc)
         return False
 
 
@@ -110,5 +110,5 @@ def upload_db(bucket_name: str, local_path: Path) -> bool:
         return True
 
     except Exception as exc:
-        logger.warning("GCS: upload failed (bucket=%s): %s", bucket_name, exc)
+        logger.exception("GCS: upload failed (bucket=%s): %s", bucket_name, exc)
         return False
