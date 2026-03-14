@@ -185,14 +185,11 @@ def do_collect_bilibili() -> int:
         conn.close()
 
 
-def do_collect_twitterapi() -> int:
-    """twitterapi.io Advanced Search collector → returns count of newly inserted tweets."""
-    from collectors.twitterapi_collector import open_db, collect_twitterapi  # noqa: PLC0415
-    conn = open_db(DB_PATH)
-    try:
-        return collect_twitterapi(conn)
-    finally:
-        conn.close()
+def do_collect_twitterapi() -> dict:
+    """twitterapi.io keyword + KOL collector → returns result dict."""
+    from collectors.twitterapi_collector import collect_all  # noqa: PLC0415
+    api_key = os.environ.get("TWITTERAPI_KEY", "").strip()
+    return collect_all(api_key, DB_PATH)
 
 
 def do_collect_coingecko() -> bool:
@@ -856,11 +853,12 @@ def main() -> None:
         print(f"     新增视频 : {val} 条")
 
     # ── Step 9: TwitterAPI.io ─────────────────────────────────────────────────
-    val, ok = run_step(9, "TwitterAPI.io 热门推文采集（TRON / TRX / Justin Sun）",
+    val, ok = run_step(9, "TwitterAPI.io 采集（关键词搜索 + 317个KOL账号监控）",
                        do_collect_twitterapi)
     step_ok["twitterapi"] = ok
-    if ok:
-        print(f"     新增推文 : {val} 条")
+    if ok and isinstance(val, dict):
+        print(f"     关键词搜索: {val.get('keyword_count', 0)} 条")
+        print(f"     KOL监控  : {val.get('kol_count', 0)} 条（{val.get('kol_groups', 0)} 组）")
 
     # ── Step 10: CoinGecko market data ────────────────────────────────────────
     val, ok = run_step(10, "CoinGecko TRX 市场数据", do_collect_coingecko)

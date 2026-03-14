@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sqlite3
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -232,6 +233,159 @@ def collect_twitterapi(conn: sqlite3.Connection) -> int:
     conn.commit()
     print(f"  [TwitterAPI.io]  成功 {new_count} 条新推文（共解析 {min(len(tweets), _MAX_TWEETS)} 条）")
     return new_count
+
+
+# ── KOL account collector ──────────────────────────────────────────────────────
+
+_ACCOUNTS_YAML = Path(__file__).parent.parent / "config" / "twitter_accounts.yaml"
+_KOL_GROUP_SIZE = 10
+_KOL_MAX_PER_GROUP = 20
+
+
+def _load_accounts(yaml_path: Path = _ACCOUNTS_YAML) -> list[str]:
+    """Load account list from YAML. Returns empty list if file missing."""
+    if not yaml_path.exists():
+        return []
+    try:
+        import re
+        text = yaml_path.read_text(encoding="utf-8")
+        # Parse list items: lines starting with "  - accountname"
+        return [m.group(1) for m in re.finditer(r"^\s+-\s+(\S+)", text, re.MULTILINE)]
+    except Exception as exc:
+        logger.warning("Failed to load twitter_accounts.yaml: %s", exc)
+        return []
+
+
+def _fetch_group(api_key: str, accounts: list[str]) -> list[dict]:
+    """Fetch up to _KOL_MAX_PER_GROUP tweets for a group of accounts."""
+    query = " OR ".join(f"from:{a}" for a in accounts)
+    params = urllib.parse.urlencode({"query": query, "queryType": "Latest"})
+    url = f"{_API_URL}?{params}"
+    req = urllib.request.Request(
+        url,
+        headers={"X-API-Key": api_key, "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return _extract_tweets(data)[:_KOL_MAX_PER_GROUP]
+    except Exception as exc:
+        logger.warning("KOL group fetch failed (%s): %s", accounts[0], exc)
+        return []
+
+
+def collect_kol_tweets(api_key: str, db_path: Path = DB_PATH) -> tuple[int, int]:
+    """
+    Fetch latest tweets from KOL accounts listed in config/twitter_accounts.yaml.
+
+    Accounts are batched in groups of 10 and queried via Advanced Search
+    (from:A OR from:B OR ...).  Returns (new_count, group_count).
+    Silently returns (0, 0) if the YAML file does not exist.
+    """
+    accounts = _load_accounts()
+    if not accounts:
+        print("  [KOL监控]  未找到 config/twitter_accounts.yaml，跳过")
+        return 0, 0
+
+    groups = [accounts[i:i + _KOL_GROUP_SIZE] for i in range(0, len(accounts), _KOL_GROUP_SIZE)]
+    conn = open_db(db_path)
+    cur = conn.cursor()
+    now_utc = datetime.now(tz=timezone.utc)
+    cutoff_30d = now_utc - timedelta(days=30)
+    now_utc_s = now_utc.isoformat()
+    new_count = 0
+
+    for idx, group in enumerate(groups):
+        tweets = _fetch_group(api_key, group)
+        for tweet in tweets:
+            if not isinstance(tweet, dict):
+                continue
+            text = (tweet.get("text") or tweet.get("full_text") or "").strip()
+            tweet_id = tweet.get("id") or tweet.get("id_str") or ""
+            username = (
+                tweet.get("author", {}).get("username")
+                or tweet.get("user", {}).get("screen_name")
+                or tweet.get("username")
+                or "unknown"
+            )
+            display_name = (
+                tweet.get("author", {}).get("name")
+                or tweet.get("user", {}).get("name")
+                or tweet.get("name")
+                or username
+            )
+            created_at = (
+                tweet.get("createdAt") or tweet.get("created_at")
+                or tweet.get("timestamp") or ""
+            )
+            public_metrics = tweet.get("public_metrics") or tweet.get("metrics") or {}
+            likes    = tweet.get("likeCount")    or public_metrics.get("like_count")    or tweet.get("favorite_count")    or 0
+            retweets = tweet.get("retweetCount") or public_metrics.get("retweet_count") or tweet.get("retweet_count")    or 0
+            replies  = tweet.get("replyCount")   or public_metrics.get("reply_count")   or tweet.get("reply_count")      or 0
+            quotes   = tweet.get("quoteCount")   or public_metrics.get("quote_count")   or tweet.get("quote_count")      or 0
+
+            if not text or not tweet_id:
+                continue
+
+            published_at = _parse_twitter_date(created_at)
+            try:
+                pub_dt = datetime.fromisoformat(published_at)
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                if pub_dt < cutoff_30d:
+                    continue
+            except Exception:
+                pass
+
+            tweet_url = f"https://twitter.com/{username}/status/{tweet_id}"
+            article = {
+                "title":        f"@{username}: {text[:100]}",
+                "link":         tweet_url,
+                "published_at": published_at,
+                "source":       "Twitter KOL",
+                "summary":      f"{text[:500]}\n❤️ {likes}  🔁 {retweets}  💬 {replies}  🔖 {quotes}",
+                "language":     "en",
+                "collected_at": now_utc_s,
+            }
+            try:
+                cur.execute(_INSERT, article)
+                new_count += cur.rowcount
+            except sqlite3.Error as exc:
+                logger.warning("KOL DB insert error: %s", exc)
+
+        conn.commit()
+        if idx < len(groups) - 1:
+            time.sleep(1)
+
+    conn.close()
+    print(f"  [KOL监控]  成功 {new_count} 条新推文（共 {len(groups)} 组，{len(accounts)} 个账号）")
+    return new_count, len(groups)
+
+
+# ── Unified entry ──────────────────────────────────────────────────────────────
+
+def collect_all(api_key: str, db_path: Path = DB_PATH) -> dict:
+    """
+    Run both keyword search and KOL account monitoring.
+
+    Returns a dict with keys: keyword_count, kol_count, kol_groups.
+    If api_key is empty, skips both and returns zeros.
+    """
+    if not api_key:
+        print("  [TwitterAPI.io]  未配置 TWITTERAPI_KEY，跳过")
+        return {"keyword_count": 0, "kol_count": 0, "kol_groups": 0}
+
+    conn = open_db(db_path)
+    keyword_count = collect_twitterapi(conn)
+    conn.close()
+
+    kol_count, kol_groups = collect_kol_tweets(api_key, db_path)
+
+    print(
+        f"  [TwitterAPI 汇总]  关键词搜索 {keyword_count} 条"
+        f" + KOL监控 {kol_count} 条（共 {kol_groups} 组）"
+    )
+    return {"keyword_count": keyword_count, "kol_count": kol_count, "kol_groups": kol_groups}
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
