@@ -1169,8 +1169,12 @@ function _renderNewsPage() {
 }
 
 function renderNews() {
-  // Use risk_alerts as the main news source (richer data), fall back to alerts
-  let items = (DATA.risk_alerts && DATA.risk_alerts.length) ? [...DATA.risk_alerts] : [...(DATA.alerts || [])];
+  // Priority: all_articles (full 30-day feed) → risk_alerts → alerts
+  let items = (DATA.all_articles && DATA.all_articles.length)
+    ? [...DATA.all_articles]
+    : (DATA.risk_alerts && DATA.risk_alerts.length)
+      ? [...DATA.risk_alerts]
+      : [...(DATA.alerts || [])];
 
   // 30-day freshness filter
   items = items.filter(_isWithin30Days);
