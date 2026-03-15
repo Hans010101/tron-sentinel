@@ -664,6 +664,7 @@ def build_dashboard_json(conn: sqlite3.Connection) -> dict:
             "title":           ar[0],
             "source":          ar[1],
             "link":            ar[2],
+            "published_at":    ar[3],          # needed by frontend _isWithin30Days
             "time_ago":        _time_ago(ar[3], now),
             "sentiment_score": ar[4],
         }
@@ -1135,6 +1136,9 @@ def _main_body() -> None:
             conn = sqlite3.connect(DB_PATH)
             data = build_dashboard_json(conn)
             conn.close()
+            _all_cnt = len(data.get("all_articles", []))
+            print(f"     all_articles 数量: {_all_cnt} 条")
+            logger.info("build_dashboard_json: all_articles=%d", _all_cnt)
             write_json(data)
             elapsed = time.perf_counter() - t0
             ov = data["overview"]
